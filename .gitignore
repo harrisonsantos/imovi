@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+out/
+.turbo/
+
+# Coverage / tests
+coverage/
+.vitest/
+*.lcov
+
+# Env
+.env
+.env.local
+.env.*.local
+.dev.vars
+
+# Cloudflare / Vercel
+.wrangler/
+.vercel/
+# next-on-pages output (gerado pelo build:cf)
+.vercel/output/
+
+# Scripts temporários de migration
+packages/db/apply-migration-temp.mjs
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Python (ml-training)
+__pycache__/
+*.pyc
+.venv/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Data / artefatos grandes (não commitar dados brutos)
+ml-training/data/raw/
+ml-training/data/interim/
+*.parquet
+*.csv
+!**/fixtures/**/*.csv
+!**/fixtures/**/*.parquet

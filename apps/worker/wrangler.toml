@@ -1,0 +1,56 @@
+name = "imovi-worker"
+main = "dist/src/worker-entrypoint.js"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+account_id = "f4000b2968b2834704aef648152c7dd4"
+workers_dev = true
+# URL: https://imovi-worker.imovibr.workers.dev
+# Subdomínio registrado: imovibr.workers.dev
+
+# ---------------------------------------------------------------------------
+# Cron triggers
+#   - Scrape diário às 03:00 BRT (UTC-3) = 06:00 UTC
+#   - Enrich-IPTU semanal: segunda-feira às 04:00 BRT = 07:00 UTC
+# ---------------------------------------------------------------------------
+[triggers]
+crons = ["0 6 * * *", "0 7 * * 1"]
+
+# ---------------------------------------------------------------------------
+# Vars — apenas valores não-sensíveis aqui.
+# DATABASE_URL deve ser definido via `wrangler secret put DATABASE_URL`
+# ---------------------------------------------------------------------------
+[vars]
+LOG_LEVEL = "info"
+NODE_ENV   = "production"
+
+# ---------------------------------------------------------------------------
+# KV binding — cache de dados IPTU
+# Criação: `wrangler kv namespace create IPTU_CACHE`
+#           `wrangler kv namespace create IPTU_CACHE --preview`
+# Substitua os IDs abaixo após criação.
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding     = "IPTU_CACHE"
+id          = "b384e5763b564f67a33408eabc578fc5"
+preview_id  = "cc01efc63dc34def97783f42ddf30282"
+
+# ---------------------------------------------------------------------------
+# R2 binding — snapshots HTML de scraping
+# Criação: `wrangler r2 bucket create html-snapshots`
+# ---------------------------------------------------------------------------
+[[r2_buckets]]
+binding    = "HTML_SNAPSHOTS"
+bucket_name = "html-snapshots"
+
+# ---------------------------------------------------------------------------
+# Ambientes
+# Nota: ao usar wrangler CLI manualmente, sempre passe --env="" para
+# garantir o ambiente top-level. Ex: wrangler deploy --env=""
+#       wrangler secret put DATABASE_URL --env=""
+# ---------------------------------------------------------------------------
+[env.preview]
+name = "imovi-worker-preview"
+
+[env.preview.vars]
+LOG_LEVEL = "debug"
+NODE_ENV  = "development"

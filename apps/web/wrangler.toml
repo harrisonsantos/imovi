@@ -1,0 +1,30 @@
+name            = "imovi-web"
+compatibility_date  = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
+# account_id não é suportado em projetos Pages — passe via --account-id na CLI
+# ou configure CLOUDFLARE_ACCOUNT_ID no ambiente
+
+# ---------------------------------------------------------------------------
+# Vars públicas (não-sensíveis)
+# ---------------------------------------------------------------------------
+[vars]
+NEXT_PUBLIC_APP_ENV = "production"
+
+# ---------------------------------------------------------------------------
+# KV binding — mesmo namespace do worker para cache compartilhado
+# Substitua os IDs após `wrangler kv namespace create IPTU_CACHE`
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding    = "IPTU_CACHE"
+id         = "b384e5763b564f67a33408eabc578fc5"
+preview_id = "cc01efc63dc34def97783f42ddf30282"
+
+# ---------------------------------------------------------------------------
+# Ambientes
+# ---------------------------------------------------------------------------
+[env.preview]
+name = "imovi-web"   # Pages usa o mesmo projeto, branch = preview
+
+[env.preview.vars]
+NEXT_PUBLIC_APP_ENV = "preview"

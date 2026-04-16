@@ -1,0 +1,32 @@
+{
+  "name": "@imovi/scrapers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@imovi/shared": "workspace:*",
+    "cheerio": "^1.0.0",
+    "p-queue": "^8.0.1",
+    "playwright": "^1.49.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@imovi/config": "workspace:*",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  }
+}

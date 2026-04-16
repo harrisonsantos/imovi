@@ -1,0 +1,80 @@
+/// <reference types="@cloudflare/workers-types" />
+/**
+ * worker-entrypoint.ts — Entrypoint para Cloudflare Workers (cron triggers)
+ *
+ * Este arquivo é o `main` do wrangler.toml.
+ * O cli.ts continua existindo para execução local via Node.js.
+ *
+ * Crons configurados no wrangler.toml:
+ *   "0 6 * * *"   — scrape diário 03:00 BRT
+ *   "0 7 * * 1"   — enrich-iptu semanal segunda 04:00 BRT
+ */
+
+import { consoleLogger } from './logger.js';
+import { runScrapeCommand } from './commands/scrape.js';
+import { runEnrichIptuCommand } from './commands/enrich-iptu.js';
+
+export interface Env {
+  DATABASE_URL: string;
+  IPTU_CACHE: KVNamespace;
+  HTML_SNAPSHOTS: R2Bucket;
+  LOG_LEVEL?: string;
+}
+
+export default {
+  /**
+   * Scheduled handler — invocado pelos cron triggers do wrangler.toml
+   * cron "0 6 * * *"  → scrape diário
+   * cron "0 7 * * 1"  → enrich-iptu semanal
+   */
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const logger = consoleLogger;
+    const databaseUrl = env.DATABASE_URL;
+
+    logger.info('worker_scheduled_start', { cron: controller.cron });
+
+    // Rotear pelo cron expression
+    if (controller.cron === '0 6 * * *') {
+      // Scrape diário — todas as sources
+      ctx.waitUntil(
+        runScrapeCommand({
+          sources: ['zap', 'vivareal', 'olx'],
+          databaseUrl,
+          logger,
+        }).then(() => logger.info('worker_scrape_done', { cron: controller.cron }))
+          .catch((err: unknown) => logger.error('worker_scrape_error', {
+            error: err instanceof Error ? err.message : String(err),
+          }))
+      );
+    } else if (controller.cron === '0 7 * * 1') {
+      // Enrich IPTU semanal
+      ctx.waitUntil(
+        runEnrichIptuCommand({
+          databaseUrl,
+          logger,
+        }).then(() => logger.info('worker_enrich_done', { cron: controller.cron }))
+          .catch((err: unknown) => logger.error('worker_enrich_error', {
+            error: err instanceof Error ? err.message : String(err),
+          }))
+      );
+    } else {
+      logger.warn('worker_unknown_cron', { cron: controller.cron });
+    }
+  },
+
+  /**
+   * Fetch handler mínimo — permite smoke test via HTTP
+   * GET https://imovi-worker.<account>.workers.dev/health
+   */
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === '/health') {
+      return Response.json({
+        status: 'ok',
+        worker: 'imovi-worker',
+        ts: new Date().toISOString(),
+      });
+    }
+    return new Response('imovi-worker — use /health', { status: 200 });
+  },
+} satisfies ExportedHandler<Env>;

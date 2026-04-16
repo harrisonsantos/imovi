@@ -1,0 +1,153 @@
+import { describe, it, expect, vi } from 'vitest';
+
+import type { NormalizedListing, RawListing, ListingSource } from '@imovi/shared';
+
+import { runScrape, type RunScrapeDeps } from '../src/pipeline/run-scrape.js';
+import { silentLogger } from '../src/logger.js';
+
+/** Helpers de factory para testes — reduzem ruído nas asserts. */
+function makeRaw(source: ListingSource, id: string): RawListing {
+  return {
+    source,
+    sourceListingId: id,
+    url: `https://example.com/${source}/${id}`,
+    price: 500000,
+    operation: 'sale',
+    area: 60,
+    bedrooms: 2,
+    bathrooms: 1,
+    parking: 1,
+    propertyType: 'apartment',
+    scrapedAt: new Date('2026-04-15T12:00:00Z'),
+    partial: false,
+  };
+}
+
+function makeNormalized(id: string, area = 60): NormalizedListing {
+  return {
+    source: 'zap',
+    sourceListingId: id,
+    url: `https://example.com/${id}`,
+    price: 500000,
+    operation: 'sale',
+    area,
+    bedrooms: 2,
+    bathrooms: 1,
+    parking: 1,
+    propertyType: 'apartment',
+    scrapedAt: new Date('2026-04-15T12:00:00Z'),
+    partial: false,
+    addressNormalized: {
+      street: 'Rua X',
+      neighborhood: 'Centro',
+      city: 'São Paulo',
+      state: 'SP',
+      cep: '01000-000',
+    },
+  };
+}
+
+async function* genFromArr<T>(arr: T[]): AsyncGenerator<T, void, void> {
+  for (const item of arr) yield item;
+}
+
+async function* throwingGen(msg: string): AsyncGenerator<RawListing, void, void> {
+  // Emite nada e lança — simula falha no meio do scraping.
+  yield* [];
+  throw new Error(msg);
+}
+
+function makeDeps(overrides: Partial<RunScrapeDeps>): RunScrapeDeps {
+  return {
+    sources: ['zap'],
+    scrapers: {},
+    normalize: (raw) => makeNormalized(raw.sourceListingId),
+    dedupe: (arr) => arr,
+    db: {},
+    repos: {
+      listings: { upsertBatch: vi.fn(async () => {}) },
+      properties: { upsertFromListing: vi.fn(async () => {}) },
+      errors: { record: vi.fn(async () => {}) },
+    },
+    logger: silentLogger,
+    ...overrides,
+  };
+}
+
+describe('runScrape', () => {
+  it('orquestra dois sources, descarta inválidos no normalize, dedupa e persiste', async () => {
+    const zapItems = [makeRaw('zap', 'z1'), makeRaw('zap', 'z2')];
+    const vivaItems = [makeRaw('vivareal', 'v1')];
+
+    const listingsUpsert = vi.fn(async () => {});
+    const propUpsert = vi.fn(async () => {});
+
+    const deps = makeDeps({
+      sources: ['zap', 'vivareal'],
+      scrapers: {
+        zap: () => genFromArr(zapItems),
+        vivareal: () => genFromArr(vivaItems),
+      },
+      // Normalizer rejeita o 'z2'.
+      normalize: (raw) =>
+        raw.sourceListingId === 'z2' ? null : makeNormalized(raw.sourceListingId),
+      // Dedupe remove duplicata "v1" vs "z1" (simula equivalência).
+      dedupe: (arr) => arr.slice(0, arr.length - 1),
+      repos: {
+        listings: { upsertBatch: listingsUpsert },
+        properties: { upsertFromListing: propUpsert },
+        errors: { record: vi.fn(async () => {}) },
+      },
+    });
+
+    const result = await runScrape(deps);
+
+    expect(result.scraped).toBe(3);
+    expect(result.normalized).toBe(2); // z2 rejeitado
+    expect(result.deduped).toBe(1); // dedupe removeu 1
+    expect(result.persisted).toBe(1);
+    expect(result.errors).toBe(0);
+    expect(listingsUpsert).toHaveBeenCalledOnce();
+    expect(propUpsert).toHaveBeenCalledOnce();
+  });
+
+  it('erro em um source não impede o outro e registra via errors.record', async () => {
+    const record = vi.fn(async () => {});
+
+    const deps = makeDeps({
+      sources: ['zap', 'vivareal'],
+      scrapers: {
+        zap: () => throwingGen('zap boom'),
+        vivareal: () => genFromArr([makeRaw('vivareal', 'v1')]),
+      },
+      repos: {
+        listings: { upsertBatch: vi.fn(async () => {}) },
+        properties: { upsertFromListing: vi.fn(async () => {}) },
+        errors: { record },
+      },
+    });
+
+    const result = await runScrape(deps);
+
+    expect(result.errors).toBeGreaterThanOrEqual(1);
+    expect(result.scraped).toBe(1);
+    expect(result.persisted).toBe(1);
+    expect(record).toHaveBeenCalledOnce();
+    const call = record.mock.calls[0] as unknown as [unknown, { source: string; message: string }];
+    expect(call[1]).toMatchObject({ source: 'zap', message: 'zap boom' });
+  });
+
+  it('respeita maxPerSource', async () => {
+    const many = Array.from({ length: 10 }, (_, i) => makeRaw('zap', `z${i}`));
+    const deps = makeDeps({
+      sources: ['zap'],
+      scrapers: { zap: () => genFromArr(many) },
+      maxPerSource: 3,
+    });
+
+    const result = await runScrape(deps);
+
+    expect(result.scraped).toBe(3);
+    expect(result.normalized).toBe(3);
+  });
+});

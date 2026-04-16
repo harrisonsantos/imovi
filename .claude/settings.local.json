@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --version)",
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "WebSearch",
+      "mcp__mcp-registry__search_mcp_registry",
+      "Bash(gh --version)",
+      "Bash(claude --version)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm --filter @imovi/shared test)",
+      "Bash(pnpm --filter @imovi/shared typecheck)",
+      "Bash(uv --version)",
+      "Bash(uv sync:*)",
+      "Bash(pnpm -r test)",
+      "Bash(pnpm -r typecheck)",
+      "Bash(pnpm --filter @imovi/normalizer typecheck)",
+      "Bash(pnpm --filter @imovi/db test)",
+      "Bash(uv run:*)",
+      "Bash(uv add:*)",
+      "Bash(cat C:/unkownimbo/apps/*/package.json)",
+      "Bash(pnpm --filter @imovi/ml-infer --filter @imovi/worker test)",
+      "Bash(pnpm --filter @imovi/ml-infer --filter @imovi/worker typecheck)",
+      "Bash(pnpm --filter @imovi/worker typecheck)"
+    ]
+  }
+}

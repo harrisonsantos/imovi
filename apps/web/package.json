@@ -1,0 +1,29 @@
+{
+  "name": "@imovi/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "build:cf": "vercel build --yes && next-on-pages",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "pages:deploy": "wrangler pages deploy .vercel/output/static --project-name=imovi-web --account-id=f4000b2968b2834704aef648152c7dd4"
+  },
+  "dependencies": {
+    "next": "^15.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/next-on-pages": "^1.13.8",
+    "@imovi/config": "workspace:*",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0",
+    "vercel": "^44.0.0",
+    "wrangler": "^3.106.0"
+  }
+}
