@@ -3,8 +3,10 @@
 out/
 next-env.d.ts
 
-# Cloudflare next-on-pages output
-.vercel/
+# Cloudflare next-on-pages output (ignora tudo em .vercel/ EXCETO project.json,
+# necessário pra evitar que `vercel build` tente autenticar na Vercel no CI)
+.vercel/*
+!.vercel/project.json
 
 # Build
 dist/

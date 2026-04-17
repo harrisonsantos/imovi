@@ -22,9 +22,10 @@ coverage/
 
 # Cloudflare / Vercel
 .wrangler/
-.vercel/
-# next-on-pages output (gerado pelo build:cf)
-.vercel/output/
+# next-on-pages: ignora tudo em .vercel/ EXCETO project.json (commitado pra
+# permitir build offline no CI, sem autenticar na Vercel)
+.vercel/*
+!.vercel/project.json
 
 # Scripts temporários de migration
 packages/db/apply-migration-temp.mjs

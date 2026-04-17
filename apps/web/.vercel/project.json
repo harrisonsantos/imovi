@@ -1,0 +1,8 @@
+{
+  "projectId": "imovi-web",
+  "orgId": "imovi-local",
+  "settings": {
+    "framework": "nextjs",
+    "nodeVersion": "22.x"
+  }
+}

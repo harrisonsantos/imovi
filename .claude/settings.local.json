@@ -24,7 +24,14 @@
       "Bash(pnpm --filter @imovi/ml-infer --filter @imovi/worker typecheck)",
       "Bash(pnpm --filter @imovi/worker typecheck)",
       "Bash(pnpm --filter @imovi/ml-infer test)",
-      "Bash(pnpm --filter @imovi/web typecheck)"
+      "Bash(pnpm --filter @imovi/web typecheck)",
+      "Bash(curl -sI https://imovi.app.br)",
+      "Bash(curl -s https://imovi.app.br/api/health)",
+      "Bash(curl -sI https://imovi-web.pages.dev)",
+      "Bash(curl -s https://imovi-web.pages.dev/api/health)",
+      "Bash(nslookup -type=ns imovi.app.br)",
+      "Bash(gh run *)",
+      "Bash(gh api *)"
     ]
   }
 }

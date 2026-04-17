@@ -48,11 +48,11 @@ jobs:
 
       - name: Build apps/web para Cloudflare Pages
         working-directory: apps/web
+        # `vercel build` roda offline porque apps/web/.vercel/project.json
+        # está commitado com IDs placeholder. Sem token, sem scope lookup,
+        # sem envio para Vercel — apenas geração local do bundle que
+        # next-on-pages consome depois.
         run: pnpm build:cf
-        env:
-          # vercel build precisa de VERCEL_ORG_ID e VERCEL_PROJECT_ID apenas
-          # se o projeto estiver linkado. Com --yes ele cria/detecta automaticamente.
-          VERCEL_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Deploy para Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
