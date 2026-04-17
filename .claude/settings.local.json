@@ -36,7 +36,9 @@
       "Bash(xargs grep *)",
       "Bash(pnpm test *)",
       "Bash(pnpm turbo *)",
-      "Bash(pnpm typecheck *)"
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm --filter @imovi/db typecheck)",
+      "Bash(git add *)"
     ]
   }
 }

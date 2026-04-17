@@ -1,55 +1,114 @@
-import { createDbClient, iptuRepo } from '@imovi/db';
-import { fetchIptu } from '@imovi/enrichment';
+/**
+ * Wire real do enrichment IPTU.
+ *
+ * MVP Curitiba: não existe adapter de IPTU público/automatizado para Curitiba
+ * (InfoSimples só cobre SP/capital). A infra está pronta:
+ *   - `listWithoutFreshIptu` lista properties candidatas
+ *   - `fetchIptu` roteia por cidade; retorna null para Curitiba com log explícito
+ *   - `iptuRepo.record` persiste quando um adapter for implementado
+ *
+ * Quando um adapter Curitiba for criado (ex.: scraper do portal da PMC),
+ * basta injetá-lo em `fetchIptuAdapter.adapters` aqui.
+ */
+import { createDbClient, propertyRepo, iptuRepo, type Property as DbProperty } from '@imovi/db';
+import { fetchIptu, type IptuCache, type IptuRecord } from '@imovi/enrichment';
 
 import type { Logger } from '../logger.js';
-import { runEnrichIptu, type Property, type IptuRecord } from '../pipeline/run-enrich.js';
+import { runEnrichIptu, type Property, type IptuRecord as PipelineIptuRecord } from '../pipeline/run-enrich.js';
 
 export interface EnrichIptuCommandOpts {
   limit?: number;
   databaseUrl: string;
   logger: Logger;
+  /** Ano fiscal alvo. Default: ano corrente. */
+  taxYear?: number;
 }
 
 /**
- * Wire real do enrichment IPTU.
- *
- * TODO(fase-5): `listPropertiesWithoutFreshIptu` ainda não existe no
- * @imovi/db — expor um repo-method dedicado quando o scheduler estiver no ar.
- * Por enquanto este command é um stub que loga "não implementado" de forma
- * explícita para o operador humano.
+ * No-op cache: sempre miss, descarta puts. Útil enquanto não temos uma
+ * camada de cache dedicada (ex.: KV IPTU_CACHE) wireada.
  */
+const noopCache: IptuCache = {
+  async getFresh() {
+    return null;
+  },
+  async put() {
+    // descarta
+  },
+};
+
 export async function runEnrichIptuCommand(
   opts: EnrichIptuCommandOpts,
 ): Promise<void> {
   const db = createDbClient({ connectionString: opts.databaseUrl });
+  const taxYear = opts.taxYear ?? new Date().getUTCFullYear();
 
-  const listProperties: (db: unknown, o: { limit?: number }) => Promise<Property[]> =
-    async () => {
-      opts.logger.warn('list_properties_fn_missing', {
-        hint: 'Implementar propertyRepo.listWithoutFreshIptu em @imovi/db',
-      });
-      return [];
-    };
+  // Flag para logar "adapter ausente" só 1x por run pra evitar spam em lote.
+  let warnedCuritibaMissing = false;
 
-  const persistIptu: (db: unknown, record: IptuRecord) => Promise<void> = async (
-    _db,
-    _record,
-  ) => {
-    // iptuRepo existe mas o contrato `upsert(record)` ainda não está fechado.
-    // Deixar o log explícito evita engolir chamadas silenciosamente.
-    opts.logger.warn('iptu_persist_fn_missing', {
-      hint: 'Definir iptuRepo.upsert em @imovi/db com shape final',
-    });
-    void iptuRepo;
+  const listProperties = async (
+    _db: unknown,
+    o: { limit?: number },
+  ): Promise<Property[]> => {
+    const rows = await propertyRepo.listWithoutFreshIptu(db, { limit: o.limit });
+    return rows as unknown as Property[];
   };
 
-  const fetchIptuAdapter = ({ property }: { property: Property }): Promise<IptuRecord | null> =>
-    (fetchIptu as unknown as (args: unknown) => Promise<IptuRecord | null>)({
-      property,
-      cache: undefined,
-      adapters: undefined,
+  const fetchIptuAdapter = async ({
+    property,
+  }: {
+    property: Property;
+  }): Promise<PipelineIptuRecord | null> => {
+    const p = property as unknown as DbProperty;
+    // Campos mínimos: sem CEP ou sem cidade não há como consultar.
+    if (!p.cep || !p.city || !p.state) {
+      opts.logger.warn('enrich_iptu_address_incomplete', { propertyId: p.id });
+      return null;
+    }
+
+    if (p.city === 'Curitiba' && p.state === 'PR' && !warnedCuritibaMissing) {
+      warnedCuritibaMissing = true;
+      opts.logger.warn('curitiba_iptu_adapter_missing', {
+        hint: 'InfoSimples não cobre Curitiba. Adapter específico pendente.',
+      });
+    }
+
+    const record = await fetchIptu({
+      address: {
+        street: p.street ?? '',
+        number: p.number ?? undefined,
+        neighborhood: undefined,
+        city: p.city,
+        state: p.state,
+        cep: p.cep,
+      } as unknown as Parameters<typeof fetchIptu>[0]['address'],
+      taxYear,
+      cache: noopCache,
+      infoSimples: undefined,
       logger: opts.logger,
     });
+
+    if (!record) return null;
+    // Anexa propertyId ao registro pra persistência.
+    return { ...(record as IptuRecord), propertyId: p.id } as unknown as PipelineIptuRecord;
+  };
+
+  const persistIptu = async (
+    _db: unknown,
+    record: PipelineIptuRecord,
+  ): Promise<void> => {
+    const r = record as unknown as IptuRecord & { propertyId: string };
+    await iptuRepo.record(db, {
+      propertyId: r.propertyId,
+      source: r.source,
+      taxYear: r.taxYear,
+      assessedValue: r.assessedValue !== null ? String(r.assessedValue) : null,
+      iptuAmount: r.iptuAmount !== null ? String(r.iptuAmount) : null,
+      cadastralNumber: r.cadastralNumber ?? null,
+      rawPayload: r.rawPayload ?? null,
+      fetchedAt: r.fetchedAt,
+    });
+  };
 
   const result = await runEnrichIptu({
     db,
