@@ -54,13 +54,14 @@ jobs:
         # next-on-pages consome depois.
         run: pnpm build:cf
 
+      # Wrangler direto via pnpm (já em apps/web/devDeps) — evita o bug do
+      # wrangler-action que tenta `npm install` em workspaces pnpm.
       - name: Deploy para Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: "f4000b2968b2834704aef648152c7dd4"
-          workingDirectory: apps/web
-          command: pages deploy .vercel/output/static --project-name=imovi-web --branch=main --account-id=f4000b2968b2834704aef648152c7dd4
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: f4000b2968b2834704aef648152c7dd4
+        run: pnpm exec wrangler pages deploy .vercel/output/static --project-name=imovi-web --branch=main
 
   # -------------------------------------------------------------------------
   # Job 2: Deploy Cloudflare Worker (apps/worker)
@@ -94,12 +95,14 @@ jobs:
       - name: Build apps/worker
         run: pnpm turbo run build --filter=@imovi/worker
 
+      # Chamamos wrangler direto via pnpm (wrangler está em apps/worker/devDeps).
+      # Evita `cloudflare/wrangler-action@v3` que roda `npm install` interno e
+      # quebra com `Unsupported URL Type "workspace:"` no monorepo pnpm.
       - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: "f4000b2968b2834704aef648152c7dd4"
-          workingDirectory: apps/worker
-          command: deploy
+        working-directory: apps/worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: f4000b2968b2834704aef648152c7dd4
+        run: pnpm exec wrangler deploy
         # DATABASE_URL é secret no Worker — provisionado via
         # `wrangler secret put DATABASE_URL` (não transita pelo CI)
