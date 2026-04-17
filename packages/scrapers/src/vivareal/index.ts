@@ -1,24 +1,25 @@
 import type { RawListing } from '@imovi/shared';
-import { Fetcher } from '../core/fetcher.js';
-import { RateLimiter } from '../core/rate-limiter.js';
+import { resolveScraperDeps } from '../core/scraper-setup.js';
 import type { ScrapeOptions } from '../core/types.js';
 import { parseVivaRealListingPage } from './parser.js';
 
 const HOST = 'www.vivareal.com.br';
 
 /**
- * Adapter de scraping do VivaReal. Paginação preguiçosa, respeita rate limit.
- * TODO: checar robots.txt antes do primeiro fetch.
+ * Adapter de scraping do VivaReal. Paginação preguiçosa, rate limit +
+ * robots.txt + User-Agent identificável.
  */
 export async function* scrapeVivaReal(opts: ScrapeOptions): AsyncIterable<RawListing> {
-  const fetcher = opts.fetcher ?? new Fetcher();
-  const limiter = opts.rateLimiter ?? new RateLimiter({ minIntervalMs: 1000 });
+  const { fetcher, limiter, policy, userAgent } = await resolveScraperDeps(HOST, opts);
   const maxPages = opts.maxPages ?? 1;
   const operationPath = opts.operation === 'rent' ? 'aluguel' : 'venda';
 
   for (let page = 1; page <= maxPages; page++) {
+    const pathPart = `/${operationPath}/${opts.location}/`;
+    if (!policy.isAllowed(userAgent, pathPart)) return;
+
     await limiter.acquire(HOST);
-    const url = `https://${HOST}/${operationPath}/${opts.location}/?pagina=${page}`;
+    const url = `https://${HOST}${pathPart}?pagina=${page}`;
     const res = await fetcher.get(url);
     if (!res.ok) return;
     const html = await res.text();

@@ -9,3 +9,8 @@ export { Fetcher, type FetcherOptions } from './core/fetcher.js';
 export { ProxyRotator } from './core/proxy-rotator.js';
 export type { ScrapeOptions } from './core/types.js';
 export type { ParseContext } from './zap/parser.js';
+export {
+  parseRobotsTxt,
+  fetchRobotsPolicy,
+  type RobotsPolicy,
+} from './core/robots.js';

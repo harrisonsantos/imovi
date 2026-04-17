@@ -31,7 +31,11 @@
       "Bash(curl -s https://imovi-web.pages.dev/api/health)",
       "Bash(nslookup -type=ns imovi.app.br)",
       "Bash(gh run *)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(find /c/unkownimbo -path \"*/\\\\.venv\" -prune -o -type f -name \"*.py\" -exec grep -l \"neon\\\\|psycopg\\\\|postgres\" {} \\\\;)",
+      "Bash(xargs grep *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm turbo *)"
     ]
   }
 }

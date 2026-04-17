@@ -1,6 +1,5 @@
 import type { RawListing } from '@imovi/shared';
-import { Fetcher } from '../core/fetcher.js';
-import { RateLimiter } from '../core/rate-limiter.js';
+import { resolveScraperDeps } from '../core/scraper-setup.js';
 import type { ScrapeOptions } from '../core/types.js';
 import { parseZapListingPage } from './parser.js';
 
@@ -9,18 +8,20 @@ const HOST = 'www.zapimoveis.com.br';
 /**
  * Adapter de scraping do Zap. Gera RawListings de forma preguiçosa por página.
  *
- * Respeita rate limit por host. Parser é puro e testado separadamente.
- * TODO: checar robots.txt antes do primeiro fetch (ainda não implementado).
+ * Respeita rate limit por host + robots.txt + envia User-Agent identificável.
+ * Parser é puro e testado separadamente.
  */
 export async function* scrapeZap(opts: ScrapeOptions): AsyncIterable<RawListing> {
-  const fetcher = opts.fetcher ?? new Fetcher();
-  const limiter = opts.rateLimiter ?? new RateLimiter({ minIntervalMs: 1000 });
+  const { fetcher, limiter, policy, userAgent } = await resolveScraperDeps(HOST, opts);
   const maxPages = opts.maxPages ?? 1;
   const operationPath = opts.operation === 'rent' ? 'aluguel' : 'venda';
 
   for (let page = 1; page <= maxPages; page++) {
+    const pathPart = `/${operationPath}/imoveis/${opts.location}/`;
+    if (!policy.isAllowed(userAgent, pathPart)) return;
+
     await limiter.acquire(HOST);
-    const url = `https://${HOST}/${operationPath}/imoveis/${opts.location}/?pagina=${page}`;
+    const url = `https://${HOST}${pathPart}?pagina=${page}`;
     const res = await fetcher.get(url);
     if (!res.ok) return;
     const html = await res.text();

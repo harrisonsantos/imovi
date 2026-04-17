@@ -6,6 +6,13 @@ import {
   scrapeErrorRepo,
   type DbClient,
 } from '@imovi/db';
+import {
+  scrapeZap,
+  scrapeVivaReal,
+  scrapeOlx,
+  fetchRobotsPolicy,
+  type RobotsPolicy,
+} from '@imovi/scrapers';
 
 import type { ListingSource, NormalizedListing, RawListing } from '@imovi/shared';
 import type { Logger } from '../logger.js';
@@ -19,10 +26,28 @@ import {
 
 export interface ScrapeCommandOpts {
   sources: ListingSource[];
+  /** Máximo de páginas por portal (Default: 3). */
+  maxPagesPerSource?: number;
+  /** Máximo de listings agregados por portal (Default: ilimitado; usado em tests). */
   max?: number;
   databaseUrl: string;
   logger: Logger;
 }
+
+/**
+ * Config de busca por source. Cada portal formata URL-de-listagem de jeito
+ * próprio — a string em `location` é interpolada direto na URL pelo adapter.
+ *
+ * MVP: Curitiba/PR, venda. Expansão futura passa a ler de KV/DB.
+ */
+const CURITIBA_JOB: Record<
+  ListingSource,
+  { location: string; operation: 'sale' | 'rent' }
+> = {
+  zap: { location: 'pr+curitiba', operation: 'sale' },
+  vivareal: { location: 'parana/curitiba', operation: 'sale' },
+  olx: { location: 'pr/curitiba', operation: 'sale' },
+};
 
 /** NormalizedListing → NewListing (Drizzle `numeric` espera string). */
 function toDbListingRow(
@@ -63,29 +88,66 @@ const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
 };
 
 /**
- * Wire real dos scrapers → pipeline.
- *
- * TODO(fase-5): `@imovi/scrapers` exige `{ fetcher, rateLimiter, proxyRotator,
- * location, operation }` por chamada. Vamos materializar esse wire quando
- * a config do scheduler (GH Actions cron) estiver definida — location/operation
- * virão do próprio job. Por ora o command loga que o wiring está pendente e
- * roda o pipeline com um map vazio para validar o caminho ponta-a-ponta.
+ * Mapeia ListingSource → factory de AsyncIterable<RawListing>, aplicando
+ * `maxPages` e a policy de robots.txt previamente carregada.
  */
+function buildScraper(
+  source: ListingSource,
+  maxPages: number,
+  policyBySource: Record<ListingSource, RobotsPolicy>,
+): ScraperFn {
+  const job = CURITIBA_JOB[source];
+  const policy = policyBySource[source];
+  const opts = {
+    location: job.location,
+    operation: job.operation,
+    maxPages,
+    robotsPolicy: policy,
+  } as const;
+
+  return async function* (): AsyncGenerator<RawListing, void, void> {
+    const iterable =
+      source === 'zap'
+        ? scrapeZap(opts)
+        : source === 'vivareal'
+          ? scrapeVivaReal(opts)
+          : scrapeOlx(opts);
+    for await (const raw of iterable) yield raw;
+  };
+}
+
+/** Hosts alvo dos 3 portais — usado pra pré-carregar robots.txt. */
+const HOSTS: Record<ListingSource, string> = {
+  zap: 'www.zapimoveis.com.br',
+  vivareal: 'www.vivareal.com.br',
+  olx: 'www.olx.com.br',
+};
+
 export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
   const db = createDbClient({ connectionString: opts.databaseUrl });
+  const maxPages = opts.maxPagesPerSource ?? 3;
 
-  opts.logger.warn('scrapers_wiring_pending', {
-    hint: 'Conectar scrapeZap/scrapeVivaReal/scrapeOlx via job-config (fase 5)',
-  });
+  // Carrega robots.txt em paralelo — 3 GETs de cold start. Cada scraper usa
+  // a policy passada; se falhar, `fetchRobotsPolicy` devolve "allow all".
+  const policyEntries = await Promise.all(
+    opts.sources.map(async (src) => [src, await fetchRobotsPolicy(HOSTS[src])] as const),
+  );
+  const policyBySource = Object.fromEntries(policyEntries) as Record<
+    ListingSource,
+    RobotsPolicy
+  >;
 
   const scrapers: Record<string, ScraperFn> = {};
   for (const source of opts.sources) {
-    // eslint-disable-next-line @typescript-eslint/require-await
-    scrapers[source] = async function* (): AsyncGenerator<RawListing, void, void> {
-      // Stub: produz zero itens até o wire real chegar.
-      return;
-    };
+    scrapers[source] = buildScraper(source, maxPages, policyBySource);
   }
+
+  opts.logger.info('scrape_command_start', {
+    sources: opts.sources,
+    city: 'curitiba',
+    state: 'pr',
+    maxPages,
+  });
 
   const result = await runScrape({
     sources: opts.sources,
