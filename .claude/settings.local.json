@@ -38,7 +38,11 @@
       "Bash(pnpm turbo *)",
       "Bash(pnpm typecheck *)",
       "Bash(pnpm --filter @imovi/db typecheck)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(python -m pytest tests/test_backtest.py -x)",
+      "Bash(python -m pytest)",
+      "Bash(python -m pytest tests/test_backtest.py tests/test_split.py tests/test_features.py tests/test_metrics.py tests/test_metadata.py)"
     ]
   }
 }

@@ -20,6 +20,11 @@ import pandas as pd
 from imovi_training.data.loader import load_training_data
 from imovi_training.data.neon_export import export_to_parquet
 from imovi_training.data.split import temporal_split
+from imovi_training.eval.backtest import (
+    generate_monthly_cutoffs,
+    run_backtest,
+    summarize,
+)
 from imovi_training.eval.metrics import coverage_by_city, mape, mdape, r2
 from imovi_training.export.metadata import build_metadata, dump_metadata_json
 from imovi_training.export.onnx import export_to_onnx
@@ -111,6 +116,38 @@ def _cmd_export_neon(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_backtest(args: argparse.Namespace) -> int:
+    """Backtest temporal rolante.
+
+    Para cada cutoff (1º dia de cada mês entre --start e --end), treina
+    em scraped_at < cutoff e avalia em [cutoff, cutoff + window_months).
+    Imprime sumário e grava JSON detalhado em --output.
+    """
+    df = load_training_data(args.input)
+    cutoffs = generate_monthly_cutoffs(args.start, args.end)
+    if not cutoffs:
+        print("erro: intervalo --start/--end não produz cutoffs.", file=sys.stderr)
+        return 2
+
+    windows = run_backtest(
+        df,
+        cutoffs,
+        window_months=args.window_months,
+        min_train=args.min_train,
+        min_test=args.min_test,
+    )
+    summary = summarize(windows)
+    payload = {
+        "summary": summary,
+        "windows": [w.to_dict() for w in windows],
+    }
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.output).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="imovi_training")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -147,6 +184,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Versão do modelo gravada no sidecar metadata (default: v1).",
     )
     train.set_defaults(func=_cmd_train)
+
+    backtest = sub.add_parser(
+        "backtest",
+        help="Backtest temporal rolante mês-a-mês com métricas por janela.",
+    )
+    backtest.add_argument("--input", required=True, help="Parquet com coluna scraped_at.")
+    backtest.add_argument("--output", required=True, help="JSON com summary + windows.")
+    backtest.add_argument("--start", required=True, help="ISO; primeiro cutoff (mês).")
+    backtest.add_argument("--end", required=True, help="ISO; último cutoff (mês).")
+    backtest.add_argument("--window-months", type=int, default=1)
+    backtest.add_argument("--min-train", type=int, default=100)
+    backtest.add_argument("--min-test", type=int, default=20)
+    backtest.set_defaults(func=_cmd_backtest)
+
     return parser
 
 
