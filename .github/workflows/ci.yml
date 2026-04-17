@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   test:
-    name: Lint, typecheck & test
+    name: TS lint typecheck test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,23 +39,35 @@ jobs:
         run: pnpm test
 
   ml-training:
-    name: Python (ml-training) tests
+    name: Python ml-training pytest
     runs-on: ubuntu-latest
-    if: hashFiles('ml-training/pyproject.toml') != ''
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if ml-training exists
+        id: check
+        run: |
+          if [ -f ml-training/pyproject.toml ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.check.outputs.exists == 'true'
         with:
           python-version: '3.13'
 
       - name: Install uv
+        if: steps.check.outputs.exists == 'true'
         run: pip install uv
 
       - name: Install deps
+        if: steps.check.outputs.exists == 'true'
         working-directory: ml-training
         run: uv sync
 
       - name: Run pytest
+        if: steps.check.outputs.exists == 'true'
         working-directory: ml-training
         run: uv run pytest
