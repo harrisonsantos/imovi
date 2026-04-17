@@ -9,7 +9,8 @@
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { neighborhoods, estimateRepo } from '@imovi/db';
-import { estimateHeuristic } from '@imovi/ml-infer';
+// Subpath evita puxar load.ts (que importa onnxruntime-node) pro bundle edge.
+import { estimateHeuristic } from '@imovi/ml-infer/heuristic';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 
