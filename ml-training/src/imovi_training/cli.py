@@ -18,10 +18,12 @@ from pathlib import Path
 import pandas as pd
 
 from imovi_training.data.loader import load_training_data
+from imovi_training.data.neon_export import export_to_parquet
 from imovi_training.data.split import temporal_split
 from imovi_training.eval.metrics import coverage_by_city, mape, mdape, r2
+from imovi_training.export.metadata import build_metadata, dump_metadata_json
 from imovi_training.export.onnx import export_to_onnx
-from imovi_training.features.builder import build_features
+from imovi_training.features.builder import build_features, compute_imputation_medians
 from imovi_training.models.lightgbm_model import train_lgbm
 
 
@@ -36,6 +38,9 @@ def _cmd_train(args: argparse.Namespace) -> int:
 
     train_df, test_df = temporal_split(df, cutoff=cutoff)
 
+    # Medianas SÓ do treino — evita leak do teste para o serving.
+    imputation_medians = compute_imputation_medians(train_df)
+
     X_train, y_train, feature_names = build_features(train_df)
     X_test, y_test, _ = build_features(test_df)
 
@@ -44,6 +49,15 @@ def _cmd_train(args: argparse.Namespace) -> int:
     onnx_bytes = export_to_onnx(model, feature_names)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(onnx_bytes)
+
+    # Sidecar JSON consumido pelo @imovi/ml-infer no runtime TS/Edge.
+    metadata = build_metadata(
+        model_version=args.model_version,
+        feature_names=feature_names,
+        imputation_medians=imputation_medians,
+    )
+    metadata_path = output_path.with_suffix(output_path.suffix + ".metadata.json")
+    metadata_path.write_text(dump_metadata_json(metadata))
 
     preds = model.predict(X_test) if len(X_test) > 0 else []
     metrics: dict[str, object] = {
@@ -66,9 +80,59 @@ def _cmd_train(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_export_neon(args: argparse.Namespace) -> int:
+    """Exporta o dataset de treino do Neon → parquet.
+
+    Conecta via `psycopg` usando `DATABASE_URL` do ambiente ou
+    `--database-url`. Filtra por cidade/estado/operação e escreve
+    parquet pronto pra `imovi_training train`.
+    """
+    import os
+
+    import psycopg
+
+    db_url = args.database_url or os.environ.get("DATABASE_URL")
+    if not db_url:
+        print("erro: --database-url ou DATABASE_URL é obrigatório", file=sys.stderr)
+        return 2
+
+    since = pd.Timestamp(args.since) if args.since else None
+
+    with psycopg.connect(db_url) as conn:
+        n = export_to_parquet(
+            conn,
+            args.output,
+            city=args.city,
+            state=args.state,
+            operation=args.operation,
+            since=since,
+        )
+    print(f"exportadas {n} linhas para {args.output}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="imovi_training")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    export = sub.add_parser(
+        "export-neon", help="Exporta dataset do Neon Postgres para parquet."
+    )
+    export.add_argument("--output", required=True, help="Arquivo parquet de saída.")
+    export.add_argument(
+        "--database-url",
+        default=None,
+        help="Connection string Postgres (fallback: $DATABASE_URL).",
+    )
+    export.add_argument("--city", default="Curitiba")
+    export.add_argument("--state", default="PR")
+    export.add_argument("--operation", default="sale", choices=["sale", "rent"])
+    export.add_argument(
+        "--since",
+        default=None,
+        help="Filtra listings com scraped_at >= ISO (ex: 2026-01-01).",
+    )
+    export.set_defaults(func=_cmd_export_neon)
 
     train = sub.add_parser("train", help="Treina o modelo e exporta ONNX + métricas.")
     train.add_argument("--input", required=True, help="Caminho do parquet de entrada.")
@@ -76,6 +140,11 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--metrics", required=True, help="Caminho do JSON de métricas.")
     train.add_argument(
         "--cutoff", required=True, help="Data de corte (ISO) para split temporal."
+    )
+    train.add_argument(
+        "--model-version",
+        default="v1",
+        help="Versão do modelo gravada no sidecar metadata (default: v1).",
     )
     train.set_defaults(func=_cmd_train)
     return parser

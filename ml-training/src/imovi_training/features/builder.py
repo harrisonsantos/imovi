@@ -13,6 +13,23 @@ TARGET_COL = "price"
 PROPERTY_TYPE_CATEGORIES: list[str] = ["apartamento", "casa", "cobertura", "studio"]
 
 
+def compute_imputation_medians(df: pd.DataFrame) -> dict[str, float]:
+    """Calcula medianas dos numéricos para usar como imputação no serving.
+
+    Deve ser chamado **apenas sobre o split de treino** — evita leak do teste.
+    O dict resultante é serializado no sidecar JSON do modelo para que o
+    runtime TypeScript use exatamente os mesmos valores em inferência.
+    """
+    medians: dict[str, float] = {}
+    for col in NUMERIC_COLS:
+        if col not in df.columns or len(df) == 0:
+            medians[col] = 0.0
+            continue
+        val = pd.to_numeric(df[col], errors="coerce").median()
+        medians[col] = 0.0 if pd.isna(val) else float(val)
+    return medians
+
+
 def _one_hot_feature_names() -> list[str]:
     return [f"property_type={c}" for c in PROPERTY_TYPE_CATEGORIES]
 
