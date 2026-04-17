@@ -4,7 +4,9 @@
  * Em Cloudflare Pages edge runtime, `process.env.DATABASE_URL` é injetado
  * a partir do binding configurado no dashboard.
  */
-import { createDbClient, type DbClient } from '@imovi/db';
+// Subpath evita puxar repositories/properties (que usa node:crypto via shared)
+// pro bundle edge.
+import { createDbClient, type DbClient } from '@imovi/db/client';
 
 let cached: DbClient | null = null;
 

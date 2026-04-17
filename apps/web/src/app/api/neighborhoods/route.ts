@@ -5,7 +5,7 @@
  * — mediana de preço muda no máximo diariamente.
  */
 import { and, eq, asc } from 'drizzle-orm';
-import { neighborhoods } from '@imovi/db';
+import { neighborhoods } from '@imovi/db/schema';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 

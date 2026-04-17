@@ -8,7 +8,8 @@
  */
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
-import { neighborhoods, estimateRepo } from '@imovi/db';
+import { neighborhoods } from '@imovi/db/schema';
+import { estimateRepo } from '@imovi/db/estimates';
 // Subpath evita puxar load.ts (que importa onnxruntime-node) pro bundle edge.
 import { estimateHeuristic } from '@imovi/ml-infer/heuristic';
 import { getDb } from '@/lib/db';
