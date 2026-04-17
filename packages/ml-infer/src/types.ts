@@ -1,7 +1,20 @@
 // Tipos do pacote de inferência AVM.
 // EstimateInput é um subset de NormalizedListing suficiente para construir o vetor de features.
 
-import type { InferenceSession } from 'onnxruntime-node';
+/**
+ * Interface mínima compatível com `InferenceSession` tanto de
+ * `onnxruntime-node` (worker CF) quanto `onnxruntime-web` (edge CF Pages).
+ * Decoplar aqui permite importar `@imovi/ml-infer` em edge sem puxar
+ * o binário nativo de onnxruntime-node pro bundle.
+ */
+export interface MinimalInferenceSession {
+  inputNames?: readonly string[];
+  outputNames?: readonly string[];
+  // data é deixada como `unknown` — o caller (infer.ts) faz narrow para
+  // os tipos numéricos esperados. Isso evita conflito com o Tensor do
+  // onnxruntime-web cuja `data` inclui string[]/BigInt64Array.
+  run(feeds: Record<string, unknown>): Promise<Record<string, { data: unknown }>>;
+}
 
 /**
  * Tipo de imóvel suportado pelo modelo — deve espelhar exatamente as categorias
@@ -51,6 +64,6 @@ export interface ModelMetadata {
  * Artefato carregado: sessão ONNX + metadata validada.
  */
 export interface ModelArtifact {
-  session: InferenceSession;
+  session: MinimalInferenceSession;
   metadata: ModelMetadata;
 }

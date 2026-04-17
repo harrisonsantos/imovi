@@ -43,9 +43,10 @@ export async function estimate(
   }
 
   // Usa o primeiro input name da sessão; fallback para 'features' se indisponível.
+  const sessionInputNames = session.inputNames;
   const inputName =
-    (session.inputNames && session.inputNames[0]) !== undefined
-      ? session.inputNames[0]!
+    sessionInputNames !== undefined && sessionInputNames[0] !== undefined
+      ? sessionInputNames[0]
       : 'features';
 
   // Cast porque aceitamos um tensor-like quando o runtime real não está disponível.
@@ -53,9 +54,10 @@ export async function estimate(
   const result = await session.run(feeds);
 
   // Pega o primeiro output (regressor escalar).
+  const sessionOutputNames = session.outputNames;
   const outputName =
-    (session.outputNames && session.outputNames[0]) !== undefined
-      ? session.outputNames[0]!
+    sessionOutputNames !== undefined && sessionOutputNames[0] !== undefined
+      ? sessionOutputNames[0]
       : Object.keys(result)[0]!;
   const outTensor = result[outputName];
   if (!outTensor) {
@@ -63,7 +65,8 @@ export async function estimate(
   }
 
   const data = outTensor.data as Float32Array | Float64Array | number[];
-  const first = data[0];
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  const first = data?.[0];
   if (typeof first !== 'number') {
     throw new Error('Saída do modelo vazia ou não numérica');
   }

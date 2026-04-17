@@ -35,7 +35,8 @@
       "Bash(find /c/unkownimbo -path \"*/\\\\.venv\" -prune -o -type f -name \"*.py\" -exec grep -l \"neon\\\\|psycopg\\\\|postgres\" {} \\\\;)",
       "Bash(xargs grep *)",
       "Bash(pnpm test *)",
-      "Bash(pnpm turbo *)"
+      "Bash(pnpm turbo *)",
+      "Bash(pnpm typecheck *)"
     ]
   }
 }

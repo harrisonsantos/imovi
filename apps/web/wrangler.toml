@@ -21,6 +21,16 @@ id         = "b384e5763b564f67a33408eabc578fc5"
 preview_id = "cc01efc63dc34def97783f42ddf30282"
 
 # ---------------------------------------------------------------------------
+# R2 — artefatos do modelo AVM (.onnx + sidecar metadata.json)
+# Conteúdo gerado por `ml-training train`; upload manual ou via GH Action
+# (roadmap fase 5.3c).
+# ---------------------------------------------------------------------------
+[[r2_buckets]]
+binding     = "MODEL_ARTIFACTS"
+bucket_name = "imovi-model-artifacts"
+preview_bucket_name = "imovi-model-artifacts-preview"
+
+# ---------------------------------------------------------------------------
 # Ambientes
 # ---------------------------------------------------------------------------
 [env.preview]

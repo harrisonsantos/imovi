@@ -2,8 +2,11 @@
 // sessionFactory é injetável para permitir mock nos testes sem carregar onnxruntime real.
 
 import { z } from 'zod';
-import type { InferenceSession } from 'onnxruntime-node';
-import type { ModelArtifact, ModelMetadata } from './types.js';
+import type {
+  MinimalInferenceSession,
+  ModelArtifact,
+  ModelMetadata,
+} from './types.js';
 
 // Schema zod para validar o sidecar JSON.
 const ModelMetadataSchema = z.object({
@@ -13,7 +16,7 @@ const ModelMetadataSchema = z.object({
   categories: z.array(z.string().min(1)).min(1),
 });
 
-export type SessionFactory = (onnxBytes: Uint8Array) => Promise<InferenceSession>;
+export type SessionFactory = (onnxBytes: Uint8Array) => Promise<MinimalInferenceSession>;
 
 export interface LoadOptions {
   /** Factory para criar a InferenceSession — default usa onnxruntime-node. */
@@ -21,13 +24,14 @@ export interface LoadOptions {
 }
 
 /**
- * Factory default que importa dinamicamente onnxruntime-node.
- * Dinâmico porque (a) permite stub em tests, (b) evita custo de import
- * em workers que nunca fazem inferência.
+ * Factory default que importa dinamicamente onnxruntime-node (Node/Worker).
+ * Dinâmico porque (a) permite stub em tests, (b) evita custo de import em
+ * workers que nunca fazem inferência, (c) mantém o bundle edge limpo — o
+ * edge usa `createWebSessionFactory()` (subpath `@imovi/ml-infer/load-web`).
  */
 const defaultSessionFactory: SessionFactory = async (onnxBytes) => {
   const ort = await import('onnxruntime-node');
-  return ort.InferenceSession.create(onnxBytes);
+  return (await ort.InferenceSession.create(onnxBytes)) as unknown as MinimalInferenceSession;
 };
 
 /**

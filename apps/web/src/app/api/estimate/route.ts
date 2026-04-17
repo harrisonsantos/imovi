@@ -1,8 +1,9 @@
 /**
  * POST /api/estimate — estima o valor de um imóvel em Curitiba/PR.
  *
- * MVP usa heurística determinística (`estimateHeuristic`). O modelo ONNX
- * será plugado aqui assim que tiver dados suficientes para treino.
+ * Ordem de fallback:
+ *   1. Modelo ONNX v1+ carregado do R2 `MODEL_ARTIFACTS` (quando disponível)
+ *   2. Heurística determinística baseada em mediana do bairro
  *
  * Cobertura: apenas Curitiba/PR. Outras cidades retornam 422.
  */
@@ -14,6 +15,8 @@ import { estimateRepo } from '@imovi/db/estimates';
 import { estimateHeuristic } from '@imovi/ml-infer/heuristic';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
+import { tryEstimateWithModel, type R2ModelBindings } from '@/lib/model';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const runtime = 'edge';
 
@@ -134,14 +137,38 @@ export async function POST(req: Request): Promise<Response> {
     return apiError(503, 'no_price_data', 'Mediana de preço inválida para este bairro.');
   }
 
-  const result = estimateHeuristic({
-    neighborhoodPriceM2: priceM2,
-    areaM2: body.area,
-    bedrooms: body.bedrooms ?? null,
-    bathrooms: body.bathrooms ?? null,
-    parking: body.parking ?? null,
-    propertyType: body.propertyType,
-  });
+  // Tenta modelo ONNX do R2; fallback silencioso pra heurística se:
+  //   - bucket MODEL_ARTIFACTS não bindado (preview sem R2)
+  //   - objeto `current/model.onnx` ausente (ainda não treinamos)
+  //   - erro no runtime WASM
+  let modelResult: Awaited<ReturnType<typeof tryEstimateWithModel>> = null;
+  try {
+    const env = (
+      getRequestContext().env as unknown as R2ModelBindings
+    );
+    modelResult = await tryEstimateWithModel(env, {
+      area: body.area,
+      bedrooms: body.bedrooms ?? null,
+      bathrooms: body.bathrooms ?? null,
+      parking: body.parking ?? null,
+      propertyType: body.propertyType,
+    });
+  } catch {
+    // getRequestContext() só funciona em runtime CF Pages — em dev local
+    // (next dev sem wrangler), pulamos silenciosamente.
+    modelResult = null;
+  }
+
+  const result =
+    modelResult ??
+    estimateHeuristic({
+      neighborhoodPriceM2: priceM2,
+      areaM2: body.area,
+      bedrooms: body.bedrooms ?? null,
+      bathrooms: body.bathrooms ?? null,
+      parking: body.parking ?? null,
+      propertyType: body.propertyType,
+    });
 
   // Auditoria — grava request + output. Não bloqueia resposta em caso de falha.
   try {
