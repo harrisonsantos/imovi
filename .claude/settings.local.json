@@ -22,7 +22,9 @@
       "Bash(cat C:/unkownimbo/apps/*/package.json)",
       "Bash(pnpm --filter @imovi/ml-infer --filter @imovi/worker test)",
       "Bash(pnpm --filter @imovi/ml-infer --filter @imovi/worker typecheck)",
-      "Bash(pnpm --filter @imovi/worker typecheck)"
+      "Bash(pnpm --filter @imovi/worker typecheck)",
+      "Bash(pnpm --filter @imovi/ml-infer test)",
+      "Bash(pnpm --filter @imovi/web typecheck)"
     ]
   }
 }

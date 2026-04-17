@@ -12,9 +12,14 @@
     "pages:deploy": "wrangler pages deploy .vercel/output/static --project-name=imovi-web --account-id=f4000b2968b2834704aef648152c7dd4"
   },
   "dependencies": {
+    "@imovi/db": "workspace:*",
+    "@imovi/ml-infer": "workspace:*",
+    "@imovi/shared": "workspace:*",
+    "drizzle-orm": "^0.36.4",
     "next": "^15.2.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.8",

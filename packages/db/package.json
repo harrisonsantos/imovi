@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --experimental-specifier-resolution=node ./src/migrate.ts"
+    "db:migrate": "node --experimental-specifier-resolution=node ./src/migrate.ts",
+    "seed:curitiba": "tsx seeds/curitiba.ts"
   },
   "dependencies": {
     "@imovi/shared": "workspace:*",
@@ -29,6 +30,7 @@
     "@types/node": "^22.10.0",
     "drizzle-kit": "^0.28.1",
     "eslint": "^9.17.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.0",
     "vitest": "^2.1.8"
   }

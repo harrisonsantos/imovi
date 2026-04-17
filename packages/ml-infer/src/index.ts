@@ -15,3 +15,6 @@ export { buildFeatureVector } from './features.js';
 
 export { estimate } from './infer.js';
 export type { EstimateOptions } from './infer.js';
+
+export { estimateHeuristic } from './heuristic.js';
+export type { HeuristicInput, HeuristicOutput } from './heuristic.js';

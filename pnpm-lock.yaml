@@ -23,6 +23,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@imovi/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@imovi/ml-infer':
+        specifier: workspace:*
+        version: link:../../packages/ml-infer
+      '@imovi/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      drizzle-orm:
+        specifier: ^0.36.4
+        version: 0.36.4(@cloudflare/workers-types@4.20260416.2)(@electric-sql/pglite@0.2.17)(@neondatabase/serverless@0.10.4)(@types/pg@8.11.6)(@types/react@19.2.14)(react@19.2.5)
       next:
         specifier: ^15.2.0
         version: 15.5.15(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -32,6 +44,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.5(react@19.2.5)
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
     devDependencies:
       '@cloudflare/next-on-pages':
         specifier: ^1.13.8
@@ -147,6 +162,9 @@ importers:
       eslint:
         specifier: ^9.17.0
         version: 9.39.4
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
