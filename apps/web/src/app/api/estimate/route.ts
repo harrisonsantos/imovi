@@ -14,7 +14,6 @@ import { estimateRepo } from '@imovi/db/estimates';
 // Subpath evita puxar load.ts (que importa onnxruntime-node) pro bundle edge.
 import { estimateHeuristic } from '@imovi/ml-infer/heuristic';
 import { getDb } from '@/lib/db';
-import { getCfEnv } from '@/lib/cf-env';
 import { apiError } from '@/lib/errors';
 import { tryEstimateWithModel, type R2ModelBindings } from '@/lib/model';
 
@@ -92,7 +91,8 @@ export async function POST(req: Request): Promise<Response> {
     return apiError(422, 'out_of_coverage', 'MVP cobre apenas Curitiba/PR.');
   }
 
-  const cfEnv = await getCfEnv();
+  const { getRequestContext } = await import('@cloudflare/next-on-pages');
+  const cfEnv = getRequestContext().env as Record<string, string>;
 
   let db;
   try {
