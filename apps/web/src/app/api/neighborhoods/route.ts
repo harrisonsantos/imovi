@@ -23,7 +23,8 @@ export async function GET(req: Request): Promise<Response> {
 
   let db;
   try {
-    db = getDb(getCfEnv().DATABASE_URL);
+    const cfEnv = await getCfEnv();
+    db = getDb(cfEnv.DATABASE_URL);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/neighborhoods] db init falhou:', err);

@@ -15,7 +15,8 @@ export async function GET(): Promise<Response> {
   const ts = new Date().toISOString();
   let dbStatus: 'ok' | 'fail' = 'fail';
   try {
-    const db = getDb(getCfEnv().DATABASE_URL);
+    const cfEnv = await getCfEnv();
+    const db = getDb(cfEnv.DATABASE_URL);
     await db.execute(sql`select 1`);
     dbStatus = 'ok';
   } catch (err) {

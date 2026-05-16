@@ -92,7 +92,7 @@ export async function POST(req: Request): Promise<Response> {
     return apiError(422, 'out_of_coverage', 'MVP cobre apenas Curitiba/PR.');
   }
 
-  const cfEnv = getCfEnv();
+  const cfEnv = await getCfEnv();
 
   let db;
   try {
