@@ -15,11 +15,18 @@ export async function GET(): Promise<Response> {
   let dbStatus: 'ok' | 'fail' = 'fail';
   let dbError: string | undefined;
   let hasUrl = false;
+  let envKeys: string[] = [];
+  let procEnvHasUrl = false;
   try {
     const { getRequestContext } = await import('@cloudflare/next-on-pages');
-    const env = getRequestContext().env as Record<string, string>;
-    hasUrl = typeof env.DATABASE_URL === 'string' && env.DATABASE_URL.length > 0;
-    const db = getDb(env.DATABASE_URL);
+    const ctx = getRequestContext();
+    const env = ctx.env as Record<string, unknown>;
+    envKeys = Object.keys(env);
+    hasUrl = typeof env.DATABASE_URL === 'string' && (env.DATABASE_URL as string).length > 0;
+    procEnvHasUrl = typeof process.env.DATABASE_URL === 'string' && process.env.DATABASE_URL.length > 0;
+    const url = (env.DATABASE_URL as string) || process.env.DATABASE_URL;
+    if (!url) throw new Error('DATABASE_URL não encontrada em env nem process.env');
+    const db = getDb(url);
     await db.execute(sql`select 1`);
     dbStatus = 'ok';
   } catch (err) {
@@ -27,5 +34,5 @@ export async function GET(): Promise<Response> {
     // eslint-disable-next-line no-console
     console.error('[api/health] db ping falhou:', err);
   }
-  return Response.json({ status: 'ok', ts, db: dbStatus, hasUrl, dbError });
+  return Response.json({ status: 'ok', ts, db: dbStatus, hasUrl, procEnvHasUrl, envKeys, dbError });
 }
