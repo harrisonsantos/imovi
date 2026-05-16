@@ -20,24 +20,38 @@ export async function GET(req: Request): Promise<Response> {
     return apiError(422, 'out_of_coverage', 'MVP cobre apenas Curitiba/PR.');
   }
 
-  const db = getDb();
-  const rows = await db
-    .select({
-      name: neighborhoods.name,
-      medianPriceM2: neighborhoods.medianPriceM2,
-    })
-    .from(neighborhoods)
-    .where(and(eq(neighborhoods.city, city), eq(neighborhoods.state, state)))
-    .orderBy(asc(neighborhoods.name));
+  let db;
+  try {
+    db = getDb();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[api/neighborhoods] db init falhou:', err);
+    return apiError(503, 'db_unavailable', 'Serviço de dados indisponível.');
+  }
 
-  const payload = rows.map((r) => ({
-    name: r.name,
-    medianPriceM2: r.medianPriceM2 !== null ? Number(r.medianPriceM2) : null,
-  }));
+  try {
+    const rows = await db
+      .select({
+        name: neighborhoods.name,
+        medianPriceM2: neighborhoods.medianPriceM2,
+      })
+      .from(neighborhoods)
+      .where(and(eq(neighborhoods.city, city), eq(neighborhoods.state, state)))
+      .orderBy(asc(neighborhoods.name));
 
-  return Response.json(payload, {
-    headers: {
-      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=300',
-    },
-  });
+    const payload = rows.map((r) => ({
+      name: r.name,
+      medianPriceM2: r.medianPriceM2 !== null ? Number(r.medianPriceM2) : null,
+    }));
+
+    return Response.json(payload, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=300',
+      },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[api/neighborhoods] query falhou:', err);
+    return apiError(503, 'db_error', 'Erro ao consultar bairros.');
+  }
 }

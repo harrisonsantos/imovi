@@ -92,7 +92,14 @@ export async function POST(req: Request): Promise<Response> {
     return apiError(422, 'out_of_coverage', 'MVP cobre apenas Curitiba/PR.');
   }
 
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[api/estimate] db init falhou:', err);
+    return apiError(503, 'db_unavailable', 'Serviço de dados indisponível.');
+  }
 
   const [hood] = await db
     .select({

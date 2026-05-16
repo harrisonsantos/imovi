@@ -1,18 +1,20 @@
-/**
- * Helper singleton para criar o cliente Drizzle nos endpoints edge.
- *
- * Em Cloudflare Pages edge runtime, `process.env.DATABASE_URL` é injetado
- * a partir do binding configurado no dashboard.
- */
 // Subpath evita puxar repositories/properties (que usa node:crypto via shared)
 // pro bundle edge.
 import { createDbClient, type DbClient } from '@imovi/db/client';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 let cached: DbClient | null = null;
 
 export function getDb(): DbClient {
   if (cached) return cached;
-  const url = process.env.DATABASE_URL;
+  let url: string | undefined = process.env.DATABASE_URL;
+  if (!url) {
+    try {
+      url = (getRequestContext().env as Record<string, string>).DATABASE_URL;
+    } catch {
+      // dev local sem CF runtime — ignora
+    }
+  }
   if (!url) {
     throw new Error('DATABASE_URL não configurada no ambiente do worker.');
   }

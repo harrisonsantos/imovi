@@ -22,13 +22,17 @@ const nextConfig = {
   transpilePackages: ['@imovi/db', '@imovi/ml-infer', '@imovi/shared'],
 
   webpack: (config) => {
-    // Mapeia `.js` especificado em imports TS para o arquivo `.ts` real — padrão
-    // ESM NodeNext. Sem esse extensionAlias, `import './foo.js'` dentro de um
-    // package workspace TS quebra no bundle do Next.
     config.resolve.extensionAlias = {
       ...(config.resolve.extensionAlias ?? {}),
       '.js': ['.ts', '.tsx', '.js', '.jsx'],
       '.mjs': ['.mts', '.mjs'],
+    };
+    // onnxruntime-node é binário nativo — infer.ts faz import dinâmico com
+    // fallback (try-catch) para ambientes sem o módulo. Sem este alias o
+    // webpack tenta resolver os .node binários e falha no bundle edge.
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      'onnxruntime-node': false,
     };
     return config;
   },
