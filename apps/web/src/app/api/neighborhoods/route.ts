@@ -7,7 +7,6 @@
 import { and, eq, asc } from 'drizzle-orm';
 import { neighborhoods } from '@imovi/db/schema';
 import { getDb } from '@/lib/db';
-import { getCfEnv } from '@/lib/cf-env';
 import { apiError } from '@/lib/errors';
 
 export const runtime = 'edge';
@@ -23,8 +22,9 @@ export async function GET(req: Request): Promise<Response> {
 
   let db;
   try {
-    const cfEnv = await getCfEnv();
-    db = getDb(cfEnv.DATABASE_URL);
+    const { getRequestContext } = await import('@cloudflare/next-on-pages');
+    const env = getRequestContext().env as Record<string, string>;
+    db = getDb(env.DATABASE_URL);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/neighborhoods] db init falhou:', err);

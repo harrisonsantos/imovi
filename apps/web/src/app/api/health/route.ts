@@ -7,7 +7,6 @@
  */
 import { sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
-import { getCfEnv } from '@/lib/cf-env';
 
 export const runtime = 'edge';
 
@@ -15,8 +14,9 @@ export async function GET(): Promise<Response> {
   const ts = new Date().toISOString();
   let dbStatus: 'ok' | 'fail' = 'fail';
   try {
-    const cfEnv = await getCfEnv();
-    const db = getDb(cfEnv.DATABASE_URL);
+    const { getRequestContext } = await import('@cloudflare/next-on-pages');
+    const env = getRequestContext().env as Record<string, string>;
+    const db = getDb(env.DATABASE_URL);
     await db.execute(sql`select 1`);
     dbStatus = 'ok';
   } catch (err) {
