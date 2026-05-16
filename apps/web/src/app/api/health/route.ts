@@ -22,10 +22,11 @@ export async function GET(): Promise<Response> {
     const ctx = getRequestContext();
     const env = ctx.env as Record<string, unknown>;
     envKeys = Object.keys(env);
-    hasUrl = typeof env.DATABASE_URL === 'string' && (env.DATABASE_URL as string).length > 0;
+    const rawVal = env.DATABASE_URL;
+    hasUrl = typeof rawVal === 'string' && rawVal.length > 0;
     procEnvHasUrl = typeof process.env.DATABASE_URL === 'string' && process.env.DATABASE_URL.length > 0;
-    const url = (env.DATABASE_URL as string) || process.env.DATABASE_URL;
-    if (!url) throw new Error('DATABASE_URL não encontrada em env nem process.env');
+    const url = String(rawVal ?? '') || process.env.DATABASE_URL;
+    if (!url) throw new Error(`DATABASE_URL tipo=${typeof rawVal} val=${JSON.stringify(rawVal)?.slice(0, 50)}`);
     const db = getDb(url);
     await db.execute(sql`select 1`);
     dbStatus = 'ok';
