@@ -24,11 +24,15 @@ preview_id = "cc01efc63dc34def97783f42ddf30282"
 # R2 — artefatos do modelo AVM (.onnx + sidecar metadata.json)
 # Conteúdo gerado por `ml-training train`; upload manual ou via GH Action
 # (roadmap fase 5.3c).
+#
+# DESABILITADO: bucket ainda não criado na conta CF. Wrangler valida
+# o bucket na hora do deploy e falha se não existir.
+# Reabilitar após: wrangler r2 bucket create imovi-model-artifacts
 # ---------------------------------------------------------------------------
-[[r2_buckets]]
-binding     = "MODEL_ARTIFACTS"
-bucket_name = "imovi-model-artifacts"
-preview_bucket_name = "imovi-model-artifacts-preview"
+# [[r2_buckets]]
+# binding     = "MODEL_ARTIFACTS"
+# bucket_name = "imovi-model-artifacts"
+# preview_bucket_name = "imovi-model-artifacts-preview"
 
 # ---------------------------------------------------------------------------
 # Ambientes
