@@ -13,6 +13,7 @@ export const runtime = 'edge';
 export async function GET(): Promise<Response> {
   const ts = new Date().toISOString();
   let dbStatus: 'ok' | 'fail' = 'fail';
+  let dbError: string | undefined;
   try {
     const db = getDb();
     await db.execute(sql`select 1`);
@@ -20,6 +21,7 @@ export async function GET(): Promise<Response> {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/health] db ping falhou:', err);
+    dbError = err instanceof Error ? err.message : String(err);
   }
-  return Response.json({ status: 'ok', ts, db: dbStatus });
+  return Response.json({ status: 'ok', ts, db: dbStatus, ...(dbError ? { dbError } : {}) });
 }
