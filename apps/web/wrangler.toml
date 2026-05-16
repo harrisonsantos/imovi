@@ -10,6 +10,7 @@ pages_build_output_dir = ".vercel/output/static"
 # ---------------------------------------------------------------------------
 [vars]
 NEXT_PUBLIC_APP_ENV = "production"
+NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAAC-vdQ1-_9T1AmV_"
 
 # ---------------------------------------------------------------------------
 # KV binding — mesmo namespace do worker para cache compartilhado

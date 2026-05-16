@@ -48,6 +48,8 @@ jobs:
 
       - name: Build apps/web para Cloudflare Pages
         working-directory: apps/web
+        env:
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAC-vdQ1-_9T1AmV_"
         # `vercel build` roda offline porque apps/web/.vercel/project.json
         # está commitado com IDs placeholder. Sem token, sem scope lookup,
         # sem envio para Vercel — apenas geração local do bundle que
