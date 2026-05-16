@@ -14,9 +14,9 @@ import { estimateRepo } from '@imovi/db/estimates';
 // Subpath evita puxar load.ts (que importa onnxruntime-node) pro bundle edge.
 import { estimateHeuristic } from '@imovi/ml-infer/heuristic';
 import { getDb } from '@/lib/db';
+import { getCfEnv } from '@/lib/cf-env';
 import { apiError } from '@/lib/errors';
 import { tryEstimateWithModel, type R2ModelBindings } from '@/lib/model';
-import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const runtime = 'edge';
 
@@ -92,9 +92,11 @@ export async function POST(req: Request): Promise<Response> {
     return apiError(422, 'out_of_coverage', 'MVP cobre apenas Curitiba/PR.');
   }
 
+  const cfEnv = getCfEnv();
+
   let db;
   try {
-    db = getDb();
+    db = getDb(cfEnv.DATABASE_URL);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/estimate] db init falhou:', err);
@@ -150,10 +152,7 @@ export async function POST(req: Request): Promise<Response> {
   //   - erro no runtime WASM
   let modelResult: Awaited<ReturnType<typeof tryEstimateWithModel>> = null;
   try {
-    const env = (
-      getRequestContext().env as unknown as R2ModelBindings
-    );
-    modelResult = await tryEstimateWithModel(env, {
+    modelResult = await tryEstimateWithModel(cfEnv as unknown as R2ModelBindings, {
       area: body.area,
       bedrooms: body.bedrooms ?? null,
       bathrooms: body.bathrooms ?? null,
@@ -161,8 +160,6 @@ export async function POST(req: Request): Promise<Response> {
       propertyType: body.propertyType,
     });
   } catch {
-    // getRequestContext() só funciona em runtime CF Pages — em dev local
-    // (next dev sem wrangler), pulamos silenciosamente.
     modelResult = null;
   }
 
