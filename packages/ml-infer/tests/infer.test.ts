@@ -26,7 +26,7 @@ function makeArtifact(outputValue: number): ModelArtifact {
     })),
     inputNames: ['features'],
     outputNames: ['output'],
-  } as unknown as import('onnxruntime-node').InferenceSession;
+  } as unknown as import('onnxruntime-node').InferenceSession; // eslint-disable-line @typescript-eslint/consistent-type-imports
   return { session, metadata };
 }
 

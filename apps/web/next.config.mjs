@@ -27,12 +27,14 @@ const nextConfig = {
       '.js': ['.ts', '.tsx', '.js', '.jsx'],
       '.mjs': ['.mts', '.mjs'],
     };
-    // onnxruntime-node é binário nativo — infer.ts faz import dinâmico com
-    // fallback (try-catch) para ambientes sem o módulo. Sem este alias o
-    // webpack tenta resolver os .node binários e falha no bundle edge.
+    // onnxruntime-node: binário nativo incompatível com edge runtime.
+    // onnxruntime-web: WASM runtime (24 MB) excede limite CF Workers de 25 MB.
+    // Ambos são importados dinamicamente com try-catch — quando ausentes,
+    // estimate/route.ts cai na heurística determinística.
     config.resolve.alias = {
       ...(config.resolve.alias ?? {}),
       'onnxruntime-node': false,
+      'onnxruntime-web': false,
     };
     return config;
   },

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { loadModel } from '../src/load.js';
 
 // Sessão mock — apenas precisa ser um objeto; os tests de load só validam metadata.
-const fakeSession = { run: vi.fn() } as unknown as import('onnxruntime-node').InferenceSession;
+const fakeSession = { run: vi.fn() } as unknown as import('onnxruntime-node').InferenceSession; // eslint-disable-line @typescript-eslint/consistent-type-imports
 const sessionFactory = async (_bytes: Uint8Array) => fakeSession;
 
 const validMetadata = JSON.stringify({

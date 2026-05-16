@@ -65,7 +65,6 @@ export async function estimate(
   }
 
   const data = outTensor.data as Float32Array | Float64Array | number[];
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const first = data?.[0];
   if (typeof first !== 'number') {
     throw new Error('Saída do modelo vazia ou não numérica');
