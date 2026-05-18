@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import { Logo } from './Logo';
 import { tokens as C } from '@/lib/tokens';

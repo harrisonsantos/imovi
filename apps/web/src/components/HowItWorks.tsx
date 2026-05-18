@@ -1,3 +1,5 @@
+'use client';
+
 import { tokens as C } from '@/lib/tokens';
 
 const steps = [
