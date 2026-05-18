@@ -1,0 +1,65 @@
+/* ── imovi global styles ───────────────────────────────────── */
+
+/* Design tokens as CSS custom properties */
+:root {
+  --bg:           #07090e;
+  --surface:      #0d1118;
+  --surface-2:    #141c27;
+  --surface-3:    #1b2535;
+  --border:       #1e2d3f;
+  --border-mid:   #273a52;
+  --text:         #dde5f0;
+  --text-2:       #5e7080;
+  --text-3:       #2b3a4a;
+  --accent:       #00d97e;
+  --accent-dim:   rgba(0,217,126,0.08);
+  --accent-mid:   rgba(0,217,126,0.20);
+  --accent-glow:  rgba(0,217,126,0.06);
+
+  --font-display: var(--font-syne), 'Syne', sans-serif;
+  --font-body:    var(--font-dm-sans), 'DM Sans', sans-serif;
+  --font-mono:    var(--font-dm-mono), 'DM Mono', monospace;
+}
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html  { scroll-behavior: smooth; }
+body  {
+  background:              var(--bg);
+  color:                   var(--text);
+  font-family:             var(--font-body);
+  -webkit-font-smoothing:  antialiased;
+  overflow-x:              hidden;
+}
+::selection { background: rgba(0,217,126,0.22); color: var(--text); }
+
+/* Scrollbar */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Form elements */
+input, select, textarea { color-scheme: dark; }
+input:focus, select:focus, textarea:focus { outline: none; }
+
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes spin  { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Responsive helpers */
+@media (max-width: 860px) {
+  .hero-grid, .form-grid { grid-template-columns: 1fr !important; }
+  .how-grid              { grid-template-columns: 1fr !important; }
+  .footer-cols           { display: none !important; }
+  .nav-links             { display: none !important; }
+  .dviz-row              { grid-template-columns: 100px 1fr 70px !important; }
+  .dviz-change           { display: none !important; }
+}
