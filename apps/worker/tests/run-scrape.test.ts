@@ -66,7 +66,7 @@ function makeDeps(overrides: Partial<RunScrapeDeps>): RunScrapeDeps {
     db: {},
     repos: {
       listings: { upsertBatch: vi.fn(async () => {}) },
-      properties: { upsertFromListing: vi.fn(async () => {}) },
+      properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
       errors: { record: vi.fn(async () => {}) },
     },
     logger: silentLogger,
@@ -80,7 +80,7 @@ describe('runScrape', () => {
     const vivaItems = [makeRaw('vivareal', 'v1')];
 
     const listingsUpsert = vi.fn(async () => {});
-    const propUpsert = vi.fn(async () => {});
+    const propUpsert = vi.fn(async () => ({ id: 'test-prop-id' }));
 
     const deps = makeDeps({
       sources: ['zap', 'vivareal'],
@@ -122,7 +122,7 @@ describe('runScrape', () => {
       },
       repos: {
         listings: { upsertBatch: vi.fn(async () => {}) },
-        properties: { upsertFromListing: vi.fn(async () => {}) },
+        properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
         errors: { record },
       },
     });
@@ -135,6 +135,32 @@ describe('runScrape', () => {
     expect(record).toHaveBeenCalledOnce();
     const call = record.mock.calls[0] as unknown as [unknown, { source: string; message: string }];
     expect(call[1]).toMatchObject({ source: 'zap', message: 'zap boom' });
+  });
+
+  it('não mata a source quando normalize lança; conta em rejected', async () => {
+    const deps = makeDeps({
+      sources: ['zap'],
+      scrapers: {
+        zap: () => genFromArr([makeRaw('zap', 'z1'), makeRaw('zap', 'z2')]),
+      },
+      normalize: (raw) => {
+        if (raw.sourceListingId === 'z1') throw new Error('sem CEP');
+        return makeNormalized(raw.sourceListingId);
+      },
+      repos: {
+        listings: { upsertBatch: vi.fn(async () => {}) },
+        properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
+        errors: { record: vi.fn(async () => {}) },
+      },
+    });
+
+    const result = await runScrape(deps);
+
+    expect(result.scraped).toBe(2);
+    expect(result.normalized).toBe(1);
+    expect(result.rejected).toBe(1);
+    expect(result.errors).toBe(0);
+    expect(result.persisted).toBe(1);
   });
 
   it('respeita maxPerSource', async () => {

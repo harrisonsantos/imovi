@@ -1,21 +1,42 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head><meta charset="utf-8" /><title>VivaReal - parcial</title></head>
+  <head><meta charset="utf-8" /><title>VivaReal - listagem parcial</title></head>
   <body>
-    <div class="listings">
-      <article class="property-card" data-listing-id="vr-9001">
-        <a class="property-card__link" href="https://www.vivareal.com.br/imovel/vr-9001/">Ver imóvel</a>
-        <h2 class="property-card__title">Imóvel sem preço</h2>
-        <p class="property-card__address">Rua X, 10 - Centro, Campinas - SP</p>
-        <p class="property-card__price" data-operation="rent">A consultar</p>
-        <ul class="property-card__details">
-          <li data-kind="area">60 m²</li>
-          <li data-kind="bedrooms">2 quartos</li>
-          <li data-kind="bathrooms">1 banheiro</li>
-          <li data-kind="parking">1 vaga</li>
-        </ul>
-        <span class="property-card__type">apartment</span>
-      </article>
-    </div>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "name": "Imóveis para alugar",
+      "numberOfItems": 1,
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "item": {
+            "@type": "Apartment",
+            "@id": "vr-9001",
+            "name": "Imóvel para alugar com 60 m², 2 quartos em Centro, Campinas",
+            "url": "https://www.vivareal.com.br/imovel/aluguel-apartamento-2-quartos-centro-campinas-sp-60m2-id-vr-9001/",
+            "keywords": "2 quartos, 1 banheiro, 1 vaga em Centro, Campinas",
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": "Rua X",
+              "addressLocality": "Campinas",
+              "addressRegion": "SP",
+              "addressCountry": "BR"
+            },
+            "numberOfBedrooms": 2,
+            "numberOfBathroomsTotal": 1,
+            "floorSize": { "@type": "QuantitativeValue", "value": 60, "unitCode": "M2" },
+            "offers": {
+              "@type": "Offer",
+              "url": "https://www.vivareal.com.br/imovel/aluguel-apartamento-2-quartos-centro-campinas-sp-60m2-id-vr-9001/",
+              "priceCurrency": "BRL"
+            }
+          }
+        }
+      ]
+    }
+    </script>
   </body>
 </html>

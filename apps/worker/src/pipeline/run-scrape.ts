@@ -8,11 +8,15 @@ import type { Logger } from '../logger.js';
 export type DbClient = unknown;
 
 export interface ListingRepo {
-  upsertBatch(db: DbClient, listings: NormalizedListing[]): Promise<void>;
+  upsertBatch(
+    db: DbClient,
+    listings: NormalizedListing[],
+    propertyIds?: Map<string, string>,
+  ): Promise<void>;
 }
 
 export interface PropertyRepo {
-  upsertFromListing(db: DbClient, listing: NormalizedListing): Promise<void>;
+  upsertFromListing(db: DbClient, listing: NormalizedListing): Promise<{ id: string }>;
 }
 
 export interface ScrapeErrorRepo {
@@ -44,6 +48,7 @@ export interface RunScrapeDeps {
 export interface RunScrapeResult {
   scraped: number;
   normalized: number;
+  rejected: number;
   deduped: number;
   persisted: number;
   errors: number;
@@ -71,6 +76,7 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
   const result: RunScrapeResult = {
     scraped: 0,
     normalized: 0,
+    rejected: 0,
     deduped: 0,
     persisted: 0,
     errors: 0,
@@ -94,10 +100,14 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
         result.scraped += 1;
         countThisSource += 1;
 
-        const norm = normalize(raw);
-        if (norm !== null) {
-          result.normalized += 1;
-          normalizedAcc.push(norm);
+        try {
+          const norm = normalize(raw);
+          if (norm !== null) {
+            result.normalized += 1;
+            normalizedAcc.push(norm);
+          }
+        } catch {
+          result.rejected += 1;
         }
 
         if (maxPerSource !== undefined && countThisSource >= maxPerSource) {
@@ -131,22 +141,25 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
   const deduped = dedupe(normalizedAcc);
   result.deduped = deduped.length;
 
-  // Persistência em batch; falhas individuais no property repo não param o batch.
+  // Persistência: upserta properties primeiro para obter IDs, depois
+  // upserta listings com o propertyId correto (necessário para ML training).
   if (deduped.length > 0) {
-    try {
-      await repos.listings.upsertBatch(db, deduped);
-      for (const listing of deduped) {
-        try {
-          await repos.properties.upsertFromListing(db, listing);
-          result.persisted += 1;
-        } catch (err) {
-          result.errors += 1;
-          logger.error('property_upsert_failed', {
-            sourceListingId: listing.sourceListingId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
+    const propertyIds = new Map<string, string>();
+    for (const listing of deduped) {
+      try {
+        const prop = await repos.properties.upsertFromListing(db, listing);
+        propertyIds.set(listing.sourceListingId, prop.id);
+        result.persisted += 1;
+      } catch (err) {
+        result.errors += 1;
+        logger.error('property_upsert_failed', {
+          sourceListingId: listing.sourceListingId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
+    }
+    try {
+      await repos.listings.upsertBatch(db, deduped, propertyIds);
     } catch (err) {
       result.errors += 1;
       logger.error('listing_batch_failed', {

@@ -7,7 +7,7 @@ import { consoleLogger, type Logger } from './logger.js';
  * para que o chamador saiba exatamente quais campos estão disponíveis.
  */
 export type ParsedArgs =
-  | { command: 'scrape'; sources: ListingSource[]; max?: number }
+  | { command: 'scrape'; sources: ListingSource[]; max?: number; pages?: number }
   | { command: 'enrich-iptu'; limit?: number }
   | { command: 'help' }
   | { command: 'unknown'; raw: string | undefined };
@@ -49,10 +49,14 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const maxRaw = flags.get('max');
     const max = maxRaw !== undefined ? Number.parseInt(maxRaw, 10) : undefined;
 
+    const pagesRaw = flags.get('pages');
+    const pages = pagesRaw !== undefined ? Number.parseInt(pagesRaw, 10) : undefined;
+
     return {
       command: 'scrape',
       sources,
       ...(max !== undefined && !Number.isNaN(max) ? { max } : {}),
+      ...(pages !== undefined && !Number.isNaN(pages) ? { pages } : {}),
     };
   }
 
@@ -79,6 +83,7 @@ export interface CliDeps {
   runScrape: (opts: {
     sources: ListingSource[];
     max?: number;
+    pages?: number;
     databaseUrl: string;
     logger: Logger;
   }) => Promise<void>;
@@ -135,6 +140,7 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
       await deps.runScrape({
         sources: parsed.sources,
         ...(parsed.max !== undefined ? { max: parsed.max } : {}),
+        ...(parsed.pages !== undefined ? { pages: parsed.pages } : {}),
         databaseUrl,
         logger: deps.logger,
       });

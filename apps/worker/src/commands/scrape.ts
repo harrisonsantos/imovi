@@ -28,6 +28,8 @@ export interface ScrapeCommandOpts {
   sources: ListingSource[];
   /** Máximo de páginas por portal (Default: 3). */
   maxPagesPerSource?: number;
+  /** Alias CLI para maxPagesPerSource (--pages flag). */
+  pages?: number;
   /** Máximo de listings agregados por portal (Default: ilimitado; usado em tests). */
   max?: number;
   databaseUrl: string;
@@ -46,7 +48,7 @@ const CURITIBA_JOB: Record<
 > = {
   zap: { location: 'pr+curitiba', operation: 'sale' },
   vivareal: { location: 'parana/curitiba', operation: 'sale' },
-  olx: { location: 'pr/curitiba', operation: 'sale' },
+  olx: { location: 'pr/cidade-curitiba', operation: 'sale' },
 };
 
 /** NormalizedListing → NewListing (Drizzle `numeric` espera string). */
@@ -66,14 +68,19 @@ function toDbListingRow(
 }
 
 const listingRepoAdapter: PipelineListingRepo = {
-  async upsertBatch(db, listings) {
-    await listingRepo.upsertBatch(db as DbClient, listings.map(toDbListingRow));
+  async upsertBatch(db, listings, propertyIds) {
+    const rows = listings.map((l) => ({
+      ...toDbListingRow(l),
+      propertyId: propertyIds?.get(l.sourceListingId) ?? null,
+    }));
+    await listingRepo.upsertBatch(db as DbClient, rows);
   },
 };
 
 const propertyRepoAdapter: PipelinePropertyRepo = {
   async upsertFromListing(db, listing) {
-    await propertyRepo.upsertFromListing(db as DbClient, listing);
+    const prop = await propertyRepo.upsertFromListing(db as DbClient, listing);
+    return { id: prop.id };
   },
 };
 
@@ -125,7 +132,7 @@ const HOSTS: Record<ListingSource, string> = {
 
 export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
   const db = createDbClient({ connectionString: opts.databaseUrl });
-  const maxPages = opts.maxPagesPerSource ?? 3;
+  const maxPages = opts.maxPagesPerSource ?? opts.pages ?? 3;
 
   // Carrega robots.txt em paralelo — 3 GETs de cold start. Cada scraper usa
   // a policy passada; se falhar, `fetchRobotsPolicy` devolve "allow all".

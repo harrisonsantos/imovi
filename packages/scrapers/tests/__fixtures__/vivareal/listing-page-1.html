@@ -2,33 +2,69 @@
 <html lang="pt-BR">
   <head><meta charset="utf-8" /><title>VivaReal - listagem</title></head>
   <body>
-    <div class="listings">
-      <article class="property-card" data-listing-id="vr-2001">
-        <a class="property-card__link" href="https://www.vivareal.com.br/imovel/vr-2001/">Ver imóvel</a>
-        <h2 class="property-card__title">Apartamento 1 quarto em Vila Madalena</h2>
-        <p class="property-card__address">Rua Harmonia, 789 - Vila Madalena, São Paulo - SP</p>
-        <p class="property-card__price" data-operation="rent">R$ 3.500/mês</p>
-        <ul class="property-card__details">
-          <li data-kind="area">45 m²</li>
-          <li data-kind="bedrooms">1 quarto</li>
-          <li data-kind="bathrooms">1 banheiro</li>
-          <li data-kind="parking">1 vaga</li>
-        </ul>
-        <span class="property-card__type">apartment</span>
-      </article>
-      <article class="property-card" data-listing-id="vr-2002">
-        <a class="property-card__link" href="https://www.vivareal.com.br/imovel/vr-2002/">Ver imóvel</a>
-        <h2 class="property-card__title">Sala comercial Centro</h2>
-        <p class="property-card__address">Av. Paulista, 1000 - Bela Vista, São Paulo - SP</p>
-        <p class="property-card__price" data-operation="rent">R$ 4.200/mês</p>
-        <ul class="property-card__details">
-          <li data-kind="area">35 m²</li>
-          <li data-kind="bedrooms">0 quartos</li>
-          <li data-kind="bathrooms">1 banheiro</li>
-          <li data-kind="parking">0 vagas</li>
-        </ul>
-        <span class="property-card__type">commercial</span>
-      </article>
-    </div>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "name": "Imóveis para alugar",
+      "numberOfItems": 2,
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "item": {
+            "@type": "Apartment",
+            "@id": "vr-2001",
+            "name": "Apartamento para alugar com 45 m², 1 quarto, 1 banheiro, 1 vaga em Vila Madalena, São Paulo",
+            "url": "https://www.vivareal.com.br/imovel/aluguel-apartamento-1-quarto-vila-madalena-sao-paulo-sp-45m2-id-vr-2001/",
+            "keywords": "1 quarto, 1 banheiro, 1 vaga em Vila Madalena, São Paulo",
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": "Rua Harmonia",
+              "addressLocality": "São Paulo",
+              "addressRegion": "SP",
+              "addressCountry": "BR"
+            },
+            "numberOfBedrooms": 1,
+            "numberOfBathroomsTotal": 1,
+            "floorSize": { "@type": "QuantitativeValue", "value": 45, "unitCode": "M2" },
+            "offers": {
+              "@type": "Offer",
+              "url": "https://www.vivareal.com.br/imovel/aluguel-apartamento-1-quarto-vila-madalena-sao-paulo-sp-45m2-id-vr-2001/",
+              "priceCurrency": "BRL",
+              "price": 3500
+            }
+          }
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "item": {
+            "@type": "CommercialProperty",
+            "@id": "vr-2002",
+            "name": "Sala comercial para alugar com 35 m² em Bela Vista, São Paulo",
+            "url": "https://www.vivareal.com.br/imovel/aluguel-sala-bela-vista-sao-paulo-sp-35m2-id-vr-2002/",
+            "keywords": "0 quartos, 1 banheiro, 0 vagas em Bela Vista, São Paulo",
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": "Av. Paulista",
+              "addressLocality": "São Paulo",
+              "addressRegion": "SP",
+              "addressCountry": "BR"
+            },
+            "numberOfBedrooms": 0,
+            "numberOfBathroomsTotal": 1,
+            "floorSize": { "@type": "QuantitativeValue", "value": 35, "unitCode": "M2" },
+            "offers": {
+              "@type": "Offer",
+              "url": "https://www.vivareal.com.br/imovel/aluguel-sala-bela-vista-sao-paulo-sp-35m2-id-vr-2002/",
+              "priceCurrency": "BRL",
+              "price": 4200
+            }
+          }
+        }
+      ]
+    }
+    </script>
   </body>
 </html>

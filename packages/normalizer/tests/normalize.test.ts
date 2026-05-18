@@ -43,4 +43,26 @@ describe('normalize', () => {
   it('RawListing com area null → lança erro', () => {
     expect(() => normalize({ ...baseRaw, area: null })).toThrow();
   });
+
+  it('addressRaw sem CEP mas com bairro mapeado de Curitiba → usa fallback de CEP', () => {
+    const raw = {
+      ...baseRaw,
+      addressRaw: 'Rua Comendador Araújo, 456 - Batel, Curitiba/PR',
+    };
+    const result = normalize(raw);
+    expect(result.addressNormalized.cep).toBe('80420-000');
+    expect(result.addressNormalized.city).toBe('Curitiba');
+    expect(result.addressNormalized.state).toBe('PR');
+  });
+
+  it('addressRaw sem CEP e bairro desconhecido → usa CEP genérico de Curitiba', () => {
+    const raw = {
+      ...baseRaw,
+      addressRaw: 'Rua X, 123 - BairroXYZ, Curitiba/PR',
+    };
+    const result = normalize(raw);
+    expect(result.addressNormalized.cep).toBe('80010-010');
+    expect(result.addressNormalized.city).toBe('Curitiba');
+    expect(result.addressNormalized.state).toBe('PR');
+  });
 });
