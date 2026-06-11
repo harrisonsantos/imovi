@@ -31,6 +31,19 @@ def test_temporal_split_cutoff_after_all_timestamps_yields_empty_test() -> None:
     assert len(train) == len(df)
 
 
+def test_temporal_split_handles_tz_aware_scraped_at() -> None:
+    """scraped_at tz-aware (UTC, como vem do Neon) + cutoff naive não explode."""
+    df = make_synthetic_df(n=100, seed=42)
+    df["scraped_at"] = pd.to_datetime(df["scraped_at"]).dt.tz_localize("UTC")
+    cutoff = pd.Timestamp("2025-01-01")  # naive
+
+    train, test = temporal_split(df, cutoff=cutoff)
+
+    assert len(train) + len(test) == len(df)
+    assert len(train) > 0
+    assert len(test) > 0
+
+
 def test_temporal_split_is_deterministic() -> None:
     """Teste 3: split é determinístico."""
     df = make_synthetic_df(n=200, seed=42)

@@ -10,7 +10,8 @@ CATEGORICAL_COLS: list[str] = ["property_type"]
 TARGET_COL = "price"
 
 # Categorias canônicas para garantir colunas one-hot estáveis (inclusive com df vazio).
-PROPERTY_TYPE_CATEGORIES: list[str] = ["apartamento", "casa", "cobertura", "studio"]
+# Alinhado ao enum PropertyType do @imovi/shared (DB grava em inglês).
+PROPERTY_TYPE_CATEGORIES: list[str] = ["apartment", "house", "land", "commercial"]
 
 
 def compute_imputation_medians(df: pd.DataFrame) -> dict[str, float]:
@@ -31,7 +32,8 @@ def compute_imputation_medians(df: pd.DataFrame) -> dict[str, float]:
 
 
 def _one_hot_feature_names() -> list[str]:
-    return [f"property_type={c}" for c in PROPERTY_TYPE_CATEGORIES]
+    # Formato property_type_<cat> — contrato com packages/ml-infer/src/features.ts
+    return [f"property_type_{c}" for c in PROPERTY_TYPE_CATEGORIES]
 
 
 def _feature_names() -> list[str]:

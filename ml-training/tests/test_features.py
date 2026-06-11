@@ -42,7 +42,7 @@ def test_build_features_one_hot_encodes_property_type() -> None:
 
     _, _, feature_names = build_features(df)
 
-    derived = [f for f in feature_names if f.startswith("property_type=")]
+    derived = [f for f in feature_names if f.startswith("property_type_")]
     assert len(derived) >= 2  # ao menos 2 categorias distintas esperadas
 
 

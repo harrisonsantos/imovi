@@ -48,12 +48,12 @@ def _sqlite_conn_with_sample_data() -> sqlite3.Connection:
         INSERT INTO neighborhoods VALUES ('n2', 'Copacabana', 'Rio de Janeiro', 'RJ');
 
         INSERT INTO properties VALUES
-          ('p1', 80.0, 2, 2, 1, 'apartamento', 'Curitiba', 'PR', 'n1'),
-          ('p2', 120.0, 3, 2, 2, 'casa',        'Curitiba', 'PR', 'n1'),
+          ('p1', 80.0, 2, 2, 1, 'apartment', 'Curitiba', 'PR', 'n1'),
+          ('p2', 120.0, 3, 2, 2, 'house',        'Curitiba', 'PR', 'n1'),
           -- área NULL: deve ser filtrado
-          ('p3', NULL,  2, 1, 0, 'apartamento', 'Curitiba', 'PR', 'n1'),
+          ('p3', NULL,  2, 1, 0, 'apartment', 'Curitiba', 'PR', 'n1'),
           -- outra cidade: deve ser filtrado
-          ('p4', 95.0,  2, 1, 1, 'apartamento', 'Rio de Janeiro', 'RJ', 'n2');
+          ('p4', 95.0,  2, 1, 1, 'apartment', 'Rio de Janeiro', 'RJ', 'n2');
 
         INSERT INTO listings VALUES
           ('l1', 'p1', 500000.0, 'sale',  '2026-03-01T10:00:00+00:00'),
@@ -92,7 +92,7 @@ def test_export_filters_city_state_and_nulls() -> None:
     # l6 operation=rent)
     assert len(df) == 2
     assert set(df["neighborhood"]) == {"Batel"}
-    assert set(df["property_type"]) == {"apartamento", "casa"}
+    assert set(df["property_type"]) == {"apartment", "house"}
 
 
 def test_export_respects_since_cutoff() -> None:

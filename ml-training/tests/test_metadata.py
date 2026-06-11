@@ -47,7 +47,7 @@ def test_compute_imputation_medians_robust_to_nan() -> None:
 
 
 def test_build_metadata_shape_matches_ts_contract() -> None:
-    feature_names = ["area_m2", "bedrooms", "property_type=apartamento"]
+    feature_names = ["area_m2", "bedrooms", "property_type_apartment"]
     medians = {"area_m2": 75.0, "bedrooms": 2.0, "bathrooms": 1.0, "parking": 1.0}
     meta = build_metadata("v1-2026-04-17", feature_names, medians)
 

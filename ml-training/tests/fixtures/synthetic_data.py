@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-PROPERTY_TYPES = ["apartamento", "casa", "cobertura", "studio"]
+PROPERTY_TYPES = ["apartment", "house", "land", "commercial"]
 CITIES = ["São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba"]
 NEIGHBORHOODS = {
     "São Paulo": ["Pinheiros", "Vila Mariana", "Moema", "Tatuapé"],
@@ -57,10 +57,10 @@ def make_synthetic_df(n: int = 500, seed: int = 42) -> pd.DataFrame:
         "Curitiba": 0.9,
     }
     type_mult = {
-        "apartamento": 1.0,
-        "casa": 1.1,
-        "cobertura": 1.8,
-        "studio": 0.7,
+        "apartment": 1.0,
+        "house": 1.1,
+        "land": 0.5,
+        "commercial": 0.9,
     }
 
     base = (

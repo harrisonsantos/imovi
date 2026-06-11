@@ -20,6 +20,12 @@ def temporal_split(
         cutoff = pd.Timestamp(cutoff)
 
     ts = pd.to_datetime(df["scraped_at"])
+    # Dados do Neon vêm tz-aware (UTC); alinha o cutoff naive ao tz da série.
+    series_tz = getattr(ts.dt, "tz", None)
+    if series_tz is not None and cutoff.tz is None:
+        cutoff = cutoff.tz_localize(series_tz)
+    elif series_tz is None and cutoff.tz is not None:
+        cutoff = cutoff.tz_localize(None)
     train_mask = ts < cutoff
 
     train = df.loc[train_mask].reset_index(drop=True)
