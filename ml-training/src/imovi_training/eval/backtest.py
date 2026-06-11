@@ -26,6 +26,10 @@ import pandas as pd
 from imovi_training.data.split import temporal_split
 from imovi_training.eval.metrics import mape, mdape, r2
 from imovi_training.features.builder import build_features
+from imovi_training.features.location import (
+    apply_neighborhood_medians,
+    compute_neighborhood_medians,
+)
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,11 @@ def run_backtest(
                 )
             )
             continue
+
+        # Feature de localização por janela — medianas SÓ do treino da janela.
+        medians, global_median = compute_neighborhood_medians(train_df)
+        train_df = apply_neighborhood_medians(train_df, medians, global_median)
+        test_df = apply_neighborhood_medians(test_df, medians, global_median)
 
         X_train, y_train, _ = build_features(train_df)
         X_test, y_test, _ = build_features(test_df)

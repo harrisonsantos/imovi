@@ -44,6 +44,16 @@ export function buildFeatureVector(
     parking: imputeNumeric(input.parking, 'parking', medians),
   };
 
+  // Feature de localização (modelo v2+): só entra se o artefato a espera —
+  // mantém compatibilidade com modelos v1 sem ela.
+  if (metadata.featureOrder.includes('neighborhood_median_price_m2')) {
+    feats['neighborhood_median_price_m2'] = imputeNumeric(
+      input.neighborhoodMedianPriceM2,
+      'neighborhood_median_price_m2',
+      medians,
+    );
+  }
+
   // One-hot estável na ordem de metadata.categories.
   for (const cat of metadata.categories) {
     feats[`property_type_${cat}`] = input.propertyType === cat ? 1 : 0;

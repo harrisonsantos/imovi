@@ -11,7 +11,7 @@
  */
 import type { ModelArtifact, EstimateInput, EstimateOutput } from '@imovi/ml-infer';
 import { estimate } from '@imovi/ml-infer/infer';
-import { loadModelWeb } from '@imovi/ml-infer/load-web';
+import { loadModelWeb, createWebSessionFactory } from '@imovi/ml-infer/load-web';
 
 export interface R2ModelBindings {
   MODEL_ARTIFACTS?: R2Bucket;
@@ -19,6 +19,9 @@ export interface R2ModelBindings {
 
 const MODEL_OBJECT_KEY = 'current/model.onnx';
 const METADATA_OBJECT_KEY = 'current/model.onnx.metadata.json';
+// Modelos quantile p10/p90 (opcionais) — intervalos calibrados.
+const MODEL_P10_KEY = 'current/model-p10.onnx';
+const MODEL_P90_KEY = 'current/model-p90.onnx';
 
 // Cache in-isolate. `null` = tentou e falhou; `undefined` = ainda não tentou.
 let cachedArtifact: ModelArtifact | null | undefined;
@@ -61,6 +64,30 @@ export async function getModelArtifact(
       metaObj.text(),
     ]);
     const artifact = await loadModelWeb(new Uint8Array(onnxBytes), metaJson);
+
+    // Modelos quantile p10/p90 (opcionais). Falha aqui não derruba o p50 —
+    // sem eles o infer usa o intervalo ±bps fixo.
+    try {
+      const [p10Obj, p90Obj] = await Promise.all([
+        bucket.get(MODEL_P10_KEY),
+        bucket.get(MODEL_P90_KEY),
+      ]);
+      if (p10Obj && p90Obj) {
+        const factory = createWebSessionFactory();
+        const [p10Bytes, p90Bytes] = await Promise.all([
+          p10Obj.arrayBuffer(),
+          p90Obj.arrayBuffer(),
+        ]);
+        const [p10, p90] = await Promise.all([
+          factory(new Uint8Array(p10Bytes)),
+          factory(new Uint8Array(p90Bytes)),
+        ]);
+        artifact.quantileSessions = { p10, p90 };
+      }
+    } catch {
+      // segue sem quantiles
+    }
+
     cachedArtifact = artifact;
     return artifact;
   } catch {

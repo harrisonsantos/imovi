@@ -29,7 +29,11 @@ from imovi_training.eval.metrics import coverage_by_city, mape, mdape, r2
 from imovi_training.export.metadata import build_metadata, dump_metadata_json
 from imovi_training.export.onnx import export_to_onnx
 from imovi_training.features.builder import build_features, compute_imputation_medians
-from imovi_training.models.lightgbm_model import train_lgbm
+from imovi_training.features.location import (
+    apply_neighborhood_medians,
+    compute_neighborhood_medians,
+)
+from imovi_training.models.lightgbm_model import train_lgbm, train_lgbm_quantile
 
 
 def _cmd_train(args: argparse.Namespace) -> int:
@@ -43,6 +47,11 @@ def _cmd_train(args: argparse.Namespace) -> int:
 
     train_df, test_df = temporal_split(df, cutoff=cutoff)
 
+    # Feature de localização: mediana R$/m² por bairro, SÓ do treino (anti-leakage).
+    neighborhood_medians, global_median = compute_neighborhood_medians(train_df)
+    train_df = apply_neighborhood_medians(train_df, neighborhood_medians, global_median)
+    test_df = apply_neighborhood_medians(test_df, neighborhood_medians, global_median)
+
     # Medianas SÓ do treino — evita leak do teste para o serving.
     imputation_medians = compute_imputation_medians(train_df)
 
@@ -54,6 +63,19 @@ def _cmd_train(args: argparse.Namespace) -> int:
     onnx_bytes = export_to_onnx(model, feature_names)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(onnx_bytes)
+
+    # Modelos quantile p10/p90 para intervalos calibrados (--quantiles).
+    # Layout: <output>.onnx + <output sem ext>-p10.onnx + -p90.onnx
+    quantile_models = {}
+    if args.quantiles:
+        for alpha, suffix in [(0.1, "p10"), (0.9, "p90")]:
+            qm = train_lgbm_quantile(X_train, y_train, alpha=alpha)
+            quantile_models[suffix] = qm
+            q_bytes = export_to_onnx(qm, feature_names)
+            q_path = output_path.with_name(
+                output_path.stem + f"-{suffix}" + output_path.suffix
+            )
+            q_path.write_bytes(q_bytes)
 
     # Sidecar JSON consumido pelo @imovi/ml-infer no runtime TS/Edge.
     metadata = build_metadata(
@@ -78,6 +100,15 @@ def _cmd_train(args: argparse.Namespace) -> int:
         if "city" in test_df.columns:
             metrics["coverage_by_city"] = coverage_by_city(
                 y_test, preds, test_df["city"].to_numpy(), tolerance=0.20
+            )
+        # Cobertura empírica do intervalo [p10, p90] no holdout (alvo ~0.80).
+        if quantile_models:
+            import numpy as np
+
+            p10 = quantile_models["p10"].predict(X_test)
+            p90 = quantile_models["p90"].predict(X_test)
+            metrics["interval_coverage_p10_p90"] = float(
+                np.mean((y_test >= p10) & (y_test <= p90))
             )
 
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
@@ -182,6 +213,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--model-version",
         default="v1",
         help="Versão do modelo gravada no sidecar metadata (default: v1).",
+    )
+    train.add_argument(
+        "--quantiles",
+        action="store_true",
+        help="Treina também modelos quantile p10/p90 (intervalos calibrados).",
     )
     train.set_defaults(func=_cmd_train)
 

@@ -38,6 +38,42 @@ const input: EstimateInput = {
   propertyType: 'apartment',
 };
 
+function makeSession(outputValue: number) {
+  return {
+    run: vi.fn(async () => ({
+      output: { data: new Float32Array([outputValue]) },
+    })),
+    inputNames: ['features'],
+    outputNames: ['output'],
+  } as unknown as ModelArtifact['session'];
+}
+
+describe('estimate com quantile sessions', () => {
+  it('usa p10/p90 como confidence low/high quando presentes', async () => {
+    const artifact: ModelArtifact = {
+      session: makeSession(500_000),
+      quantileSessions: { p10: makeSession(420_000), p90: makeSession(610_000) },
+      metadata,
+    };
+    const out = await estimate(artifact, input);
+    expect(out.estimate).toBe(500_000);
+    expect(out.confidenceLow).toBe(420_000);
+    expect(out.confidenceHigh).toBe(610_000);
+  });
+
+  it('corrige quantile crossing (p10 > p90) ordenando os limites', async () => {
+    const artifact: ModelArtifact = {
+      session: makeSession(500_000),
+      quantileSessions: { p10: makeSession(620_000), p90: makeSession(480_000) },
+      metadata,
+    };
+    const out = await estimate(artifact, input);
+    expect(out.confidenceLow).toBeLessThanOrEqual(out.confidenceHigh);
+    expect(out.confidenceLow).toBeLessThanOrEqual(out.estimate);
+    expect(out.confidenceHigh).toBeGreaterThanOrEqual(out.estimate);
+  });
+});
+
 describe('estimate', () => {
   it('retorna estimate=500000 quando session mock devolve [500000]', async () => {
     const artifact = makeArtifact(500000);

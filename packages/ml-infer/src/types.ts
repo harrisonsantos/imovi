@@ -32,6 +32,11 @@ export interface EstimateInput {
   bathrooms: number | null;
   parking: number | null;
   propertyType: PropertyType;
+  /**
+   * Mediana de preço/m² do bairro (neighborhoods.median_price_m2). Feature de
+   * localização do modelo v2+; null → imputação pela mediana do artefato.
+   */
+  neighborhoodMedianPriceM2?: number | null;
 }
 
 /**
@@ -65,5 +70,13 @@ export interface ModelMetadata {
  */
 export interface ModelArtifact {
   session: MinimalInferenceSession;
+  /**
+   * Sessões dos modelos quantile p10/p90 (intervalos calibrados). Quando
+   * presentes, estimate() usa-as como confidenceLow/High em vez do ±bps fixo.
+   */
+  quantileSessions?: {
+    p10: MinimalInferenceSession;
+    p90: MinimalInferenceSession;
+  };
   metadata: ModelMetadata;
 }

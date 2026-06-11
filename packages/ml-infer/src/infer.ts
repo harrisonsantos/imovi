@@ -23,23 +23,21 @@ const DEFAULT_INTERVAL_BPS = 1500;
  * - Cria tensor shape [1, featureOrder.length]
  * - Lê o primeiro valor do output (regressor escalar)
  */
-export async function estimate(
-  artifact: ModelArtifact,
-  input: EstimateInput,
-  opts: EstimateOptions = {},
-): Promise<EstimateOutput> {
-  const { session, metadata } = artifact;
-  const [vec, featuresUsed] = buildFeatureVector(input, metadata);
-
+/** Roda uma sessão (regressor escalar) sobre o vetor de features. */
+async function runScalarSession(
+  session: ModelArtifact['session'],
+  vec: Float32Array,
+  featureCount: number,
+): Promise<number> {
   // Import dinâmico de onnxruntime-node — se indisponível (ex.: ambiente de testes
   // sem a dep nativa), caímos num tensor-like mínimo compatível com o shape esperado.
   // Em produção o módulo está sempre presente.
   let tensor: unknown;
   try {
     const ort = await import('onnxruntime-node');
-    tensor = new ort.Tensor('float32', vec, [1, metadata.featureOrder.length]);
+    tensor = new ort.Tensor('float32', vec, [1, featureCount]);
   } catch {
-    tensor = { data: vec, dims: [1, metadata.featureOrder.length], type: 'float32' };
+    tensor = { data: vec, dims: [1, featureCount], type: 'float32' };
   }
 
   // Usa o primeiro input name da sessão; fallback para 'features' se indisponível.
@@ -69,12 +67,37 @@ export async function estimate(
   if (typeof first !== 'number') {
     throw new Error('Saída do modelo vazia ou não numérica');
   }
-  const estimateValue = Number(first);
+  return Number(first);
+}
 
-  const bps = opts.intervalBps ?? DEFAULT_INTERVAL_BPS;
-  const factor = bps / 10_000;
-  const confidenceLow = estimateValue * (1 - factor);
-  const confidenceHigh = estimateValue * (1 + factor);
+export async function estimate(
+  artifact: ModelArtifact,
+  input: EstimateInput,
+  opts: EstimateOptions = {},
+): Promise<EstimateOutput> {
+  const { session, quantileSessions, metadata } = artifact;
+  const [vec, featuresUsed] = buildFeatureVector(input, metadata);
+  const n = metadata.featureOrder.length;
+
+  const estimateValue = await runScalarSession(session, vec, n);
+
+  let confidenceLow: number;
+  let confidenceHigh: number;
+  if (quantileSessions) {
+    // Intervalos calibrados via quantile regression (p10/p90).
+    const [p10, p90] = await Promise.all([
+      runScalarSession(quantileSessions.p10, vec, n),
+      runScalarSession(quantileSessions.p90, vec, n),
+    ]);
+    // Guard contra quantile crossing: ordena e garante que contém a estimativa.
+    confidenceLow = Math.min(p10, p90, estimateValue);
+    confidenceHigh = Math.max(p10, p90, estimateValue);
+  } else {
+    const bps = opts.intervalBps ?? DEFAULT_INTERVAL_BPS;
+    const factor = bps / 10_000;
+    confidenceLow = estimateValue * (1 - factor);
+    confidenceHigh = estimateValue * (1 + factor);
+  }
 
   return {
     estimate: estimateValue,

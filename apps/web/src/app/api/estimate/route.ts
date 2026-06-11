@@ -158,6 +158,7 @@ export async function POST(req: Request): Promise<Response> {
       bathrooms: body.bathrooms ?? null,
       parking: body.parking ?? null,
       propertyType: body.propertyType,
+      neighborhoodMedianPriceM2: priceM2,
     });
   } catch {
     modelResult = null;

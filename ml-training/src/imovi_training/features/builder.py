@@ -5,7 +5,15 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-NUMERIC_COLS: list[str] = ["area_m2", "bedrooms", "bathrooms", "parking"]
+NUMERIC_COLS: list[str] = [
+    "area_m2",
+    "bedrooms",
+    "bathrooms",
+    "parking",
+    # Feature de localização — preenchida via features/location.py no treino;
+    # no serving o TS passa neighborhoods.median_price_m2 do banco.
+    "neighborhood_median_price_m2",
+]
 CATEGORICAL_COLS: list[str] = ["property_type"]
 TARGET_COL = "price"
 

@@ -68,6 +68,47 @@ describe('buildFeatureVector', () => {
     expect(Array.from(vec.slice(4, 8))).toEqual([0, 0, 1, 0]);
   });
 
+  it('inclui neighborhood_median_price_m2 quando o artefato a espera (modelo v2)', () => {
+    const metaV2: ModelMetadata = {
+      ...metadata,
+      featureOrder: [...metadata.featureOrder, 'neighborhood_median_price_m2'],
+      imputationMedians: { ...metadata.imputationMedians, neighborhood_median_price_m2: 6000 },
+    };
+    const input: EstimateInput = {
+      area: 100,
+      bedrooms: 2,
+      bathrooms: 1,
+      parking: 1,
+      propertyType: 'apartment',
+      neighborhoodMedianPriceM2: 9500,
+    };
+    const [vec, used] = buildFeatureVector(input, metaV2);
+    expect(vec[vec.length - 1]).toBe(9500);
+    expect(used['neighborhood_median_price_m2']).toBe(9500);
+  });
+
+  it('imputa neighborhood_median_price_m2 quando null (v2) e ignora em modelo v1', () => {
+    const metaV2: ModelMetadata = {
+      ...metadata,
+      featureOrder: [...metadata.featureOrder, 'neighborhood_median_price_m2'],
+      imputationMedians: { ...metadata.imputationMedians, neighborhood_median_price_m2: 6000 },
+    };
+    const input: EstimateInput = {
+      area: 100,
+      bedrooms: 2,
+      bathrooms: 1,
+      parking: 1,
+      propertyType: 'apartment',
+      neighborhoodMedianPriceM2: null,
+    };
+    const [vecV2] = buildFeatureVector(input, metaV2);
+    expect(vecV2[vecV2.length - 1]).toBe(6000); // imputado
+
+    // Modelo v1 (sem a feature no featureOrder) continua funcionando
+    const [vecV1] = buildFeatureVector(input, metadata);
+    expect(vecV1.length).toBe(metadata.featureOrder.length);
+  });
+
   it('featuresUsed é dict com nomes humanos', () => {
     const input: EstimateInput = {
       area: 90,
