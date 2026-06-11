@@ -9,7 +9,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { neon } from '@neondatabase/serverless';
+import { Client } from '@neondatabase/serverless';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
@@ -25,12 +25,18 @@ async function main(): Promise<void> {
     .filter((f) => f.endsWith('.sql') && !f.includes('_pglite'))
     .sort();
 
-  const sql = neon(url);
-  for (const file of files) {
-    const content = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
-    console.log(`[db:migrate] aplicando ${file}`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (sql as unknown as { query: (q: string) => Promise<unknown> }).query(content);
+  // Client WebSocket (não o HTTP tagged-template): aceita SQL multi-statement,
+  // necessário para arquivos de migration com vários CREATE.
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  try {
+    for (const file of files) {
+      const content = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
+      console.log(`[db:migrate] aplicando ${file}`);
+      await client.query(content);
+    }
+  } finally {
+    await client.end();
   }
   console.log('[db:migrate] ok');
 }
