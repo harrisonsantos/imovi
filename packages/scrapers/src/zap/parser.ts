@@ -22,7 +22,7 @@ function mapZapType(raw: string | undefined | null): PropertyType | null {
 function parseParking(text: string | undefined | null): number | null {
   if (!text) return null;
   const m = text.match(/(\d+)\s*vaga/i);
-  return m ? Number.parseInt(m[1], 10) : null;
+  return m?.[1] ? Number.parseInt(m[1], 10) : null;
 }
 
 /** Extrai bairro do `name`: "... em {bairro}, {cidade}" */
@@ -70,6 +70,7 @@ export function parseZapListingPage(html: string, ctx: ParseContext): RawListing
   while ((match = scriptRe.exec(html)) !== null) {
     let data: unknown;
     try {
+      if (match[1] === undefined) continue;
       data = JSON.parse(match[1]);
     } catch {
       continue;

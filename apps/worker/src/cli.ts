@@ -9,6 +9,7 @@ import { consoleLogger, type Logger } from './logger.js';
 export type ParsedArgs =
   | { command: 'scrape'; sources: ListingSource[]; max?: number; pages?: number }
   | { command: 'enrich-iptu'; limit?: number }
+  | { command: 'backfill-neighborhoods' }
   | { command: 'help' }
   | { command: 'unknown'; raw: string | undefined };
 
@@ -60,6 +61,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     };
   }
 
+  if (command === 'backfill-neighborhoods') {
+    return { command: 'backfill-neighborhoods' };
+  }
+
   if (command === 'enrich-iptu') {
     const limitRaw = flags.get('limit');
     const limit = limitRaw !== undefined ? Number.parseInt(limitRaw, 10) : undefined;
@@ -92,6 +97,10 @@ export interface CliDeps {
     databaseUrl: string;
     logger: Logger;
   }) => Promise<void>;
+  runBackfillNeighborhoods?: (opts: {
+    databaseUrl: string;
+    logger: Logger;
+  }) => Promise<unknown>;
 }
 
 const HELP_TEXT = `imovi-worker — jobs do Imovi (AVM)
@@ -99,6 +108,7 @@ const HELP_TEXT = `imovi-worker — jobs do Imovi (AVM)
 Uso:
   imovi-worker scrape --source zap,vivareal --max 100
   imovi-worker enrich-iptu --limit 50
+  imovi-worker backfill-neighborhoods
 
 Flags:
   --source   Lista separada por vírgula: zap,vivareal,olx (padrão: todas)
@@ -144,6 +154,11 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
         databaseUrl,
         logger: deps.logger,
       });
+    } else if (parsed.command === 'backfill-neighborhoods') {
+      if (!deps.runBackfillNeighborhoods) {
+        throw new Error('backfill-neighborhoods não disponível neste entrypoint');
+      }
+      await deps.runBackfillNeighborhoods({ databaseUrl, logger: deps.logger });
     } else {
       await deps.runEnrichIptu({
         ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
@@ -175,6 +190,9 @@ if (
 ) {
   const { runScrapeCommand } = await import('./commands/scrape.js');
   const { runEnrichIptuCommand } = await import('./commands/enrich-iptu.js');
+  const { runBackfillNeighborhoodsCommand } = await import(
+    './commands/backfill-neighborhoods.js'
+  );
 
   await runCli(process.argv.slice(2), {
     env: process.env,
@@ -182,5 +200,6 @@ if (
     logger: consoleLogger,
     runScrape: runScrapeCommand,
     runEnrichIptu: runEnrichIptuCommand,
+    runBackfillNeighborhoods: runBackfillNeighborhoodsCommand,
   });
 }

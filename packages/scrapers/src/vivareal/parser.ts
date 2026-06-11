@@ -15,7 +15,7 @@ function mapVivaRealType(raw: string | undefined | null): PropertyType | null {
 function parseParking(text: string | undefined | null): number | null {
   if (!text) return null;
   const m = text.match(/(\d+)\s*vaga/i);
-  return m ? Number.parseInt(m[1], 10) : null;
+  return m?.[1] ? Number.parseInt(m[1], 10) : null;
 }
 
 function extractNeighborhoodFromName(name: string, city: string): string | undefined {
@@ -54,7 +54,8 @@ export function parseVivaRealListingPage(html: string, ctx: ParseContext): RawLi
 
   while ((match = scriptRe.exec(html)) !== null) {
     let data: unknown;
-    try { data = JSON.parse(match[1]); } catch { continue; }
+    try { if (match[1] === undefined) continue;
+      data = JSON.parse(match[1]); } catch { continue; }
 
     if (!data || typeof data !== 'object') continue;
     const d = data as { '@type'?: string; itemListElement?: unknown[] };

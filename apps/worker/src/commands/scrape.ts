@@ -1,8 +1,9 @@
-import { normalize, dedupe } from '@imovi/normalizer';
+import { normalize, dedupe, matchNeighborhood, type NeighborhoodCandidate } from '@imovi/normalizer';
 import {
   createDbClient,
   listingRepo,
   propertyRepo,
+  neighborhoodRepo,
   scrapeErrorRepo,
   type DbClient,
 } from '@imovi/db';
@@ -77,12 +78,29 @@ const listingRepoAdapter: PipelineListingRepo = {
   },
 };
 
-const propertyRepoAdapter: PipelinePropertyRepo = {
-  async upsertFromListing(db, listing) {
-    const prop = await propertyRepo.upsertFromListing(db as DbClient, listing);
-    return { id: prop.id };
-  },
-};
+/**
+ * Adapter de property repo com matcher de bairro: resolve neighborhood_id a
+ * partir do addressRaw contra os bairros da cidade (carregados uma vez por job).
+ */
+function makePropertyRepoAdapter(
+  neighborhoodsByCity: Map<string, NeighborhoodCandidate[]>,
+): PipelinePropertyRepo {
+  return {
+    async upsertFromListing(db, listing) {
+      const city = listing.addressNormalized.city;
+      const candidates = neighborhoodsByCity.get(city) ?? [];
+      const neighborhoodId = listing.addressRaw
+        ? matchNeighborhood(listing.addressRaw, city, candidates)
+        : undefined;
+      const prop = await propertyRepo.upsertFromListing(
+        db as DbClient,
+        listing,
+        neighborhoodId ? { neighborhoodId } : undefined,
+      );
+      return { id: prop.id };
+    },
+  };
+}
 
 const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
   async record(db, err) {
@@ -156,6 +174,11 @@ export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
     maxPages,
   });
 
+  // Carrega bairros da cidade uma vez por job — usados pelo matcher de
+  // neighborhood_id no upsert de properties.
+  const neighborhoodsByCity = new Map<string, NeighborhoodCandidate[]>();
+  neighborhoodsByCity.set('Curitiba', await neighborhoodRepo.listByCity(db, 'Curitiba', 'PR'));
+
   const result = await runScrape({
     sources: opts.sources,
     scrapers,
@@ -164,7 +187,7 @@ export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
     db,
     repos: {
       listings: listingRepoAdapter,
-      properties: propertyRepoAdapter,
+      properties: makePropertyRepoAdapter(neighborhoodsByCity),
       errors: scrapeErrorRepoAdapter,
     },
     logger: opts.logger,

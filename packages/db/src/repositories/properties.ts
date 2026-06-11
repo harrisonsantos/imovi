@@ -5,7 +5,7 @@
  *   - fingerprint novo  → INSERT;
  *   - fingerprint conhecido → reuso + update de last_seen_at.
  */
-import { eq, isNull, lt, or, max } from 'drizzle-orm';
+import { and, eq, isNull, lt, or, max } from 'drizzle-orm';
 import { computeFingerprint, type NormalizedListing } from '@imovi/shared';
 import { properties, iptuRecords, type Property } from '../schema.js';
 import type { AnyDbClient } from './types.js';
@@ -18,9 +18,18 @@ export interface ListWithoutFreshIptuOpts {
   now?: Date;
 }
 
+export interface UpsertFromListingOpts {
+  /** neighborhood_id resolvido pelo matcher (pipeline). Preenche apenas se ainda NULL. */
+  neighborhoodId?: string;
+}
+
 export interface PropertyRepo {
   findByFingerprint(db: AnyDbClient, fingerprint: string): Promise<Property | null>;
-  upsertFromListing(db: AnyDbClient, listing: NormalizedListing): Promise<Property>;
+  upsertFromListing(
+    db: AnyDbClient,
+    listing: NormalizedListing,
+    opts?: UpsertFromListingOpts,
+  ): Promise<Property>;
   /**
    * Retorna properties que NÃO possuem registro IPTU com `fetched_at` dentro
    * da janela de 365 dias. Usado pelo pipeline de enrichment para decidir
@@ -30,6 +39,14 @@ export interface PropertyRepo {
     db: AnyDbClient,
     opts?: ListWithoutFreshIptuOpts,
   ): Promise<Property[]>;
+  /** Properties da cidade com neighborhood_id NULL (para backfill do matcher). */
+  listWithoutNeighborhood(
+    db: AnyDbClient,
+    city: string,
+    state: string,
+  ): Promise<Array<{ id: string; addressRaw: string | null }>>;
+  /** Seta neighborhood_id de uma property (backfill). */
+  setNeighborhoodId(db: AnyDbClient, id: string, neighborhoodId: string): Promise<void>;
 }
 
 export const propertyRepo: PropertyRepo = {
@@ -42,7 +59,7 @@ export const propertyRepo: PropertyRepo = {
     return rows[0] ?? null;
   },
 
-  async upsertFromListing(db, listing) {
+  async upsertFromListing(db, listing, opts) {
     const fingerprint = computeFingerprint(listing);
     const addr = listing.addressNormalized;
     const now = new Date();
@@ -51,7 +68,13 @@ export const propertyRepo: PropertyRepo = {
     if (existing) {
       const [updated] = await db
         .update(properties)
-        .set({ lastSeenAt: now })
+        .set({
+          lastSeenAt: now,
+          // Preenche neighborhood_id apenas se ainda não setado (não sobrescreve).
+          ...(opts?.neighborhoodId && !existing.neighborhoodId
+            ? { neighborhoodId: opts.neighborhoodId }
+            : {}),
+        })
         .where(eq(properties.id, existing.id))
         .returning();
       return updated ?? existing;
@@ -61,6 +84,7 @@ export const propertyRepo: PropertyRepo = {
       .insert(properties)
       .values({
         fingerprint,
+        neighborhoodId: opts?.neighborhoodId ?? null,
         addressRaw: listing.addressRaw,
         street: addr.street,
         number: addr.number,
@@ -78,6 +102,23 @@ export const propertyRepo: PropertyRepo = {
       .returning();
     if (!inserted) throw new Error('propertyRepo.upsertFromListing: insert returned no row');
     return inserted;
+  },
+
+  async listWithoutNeighborhood(db, city, state) {
+    return await db
+      .select({ id: properties.id, addressRaw: properties.addressRaw })
+      .from(properties)
+      .where(
+        and(
+          isNull(properties.neighborhoodId),
+          eq(properties.city, city),
+          eq(properties.state, state),
+        ),
+      );
+  },
+
+  async setNeighborhoodId(db, id, neighborhoodId) {
+    await db.update(properties).set({ neighborhoodId }).where(eq(properties.id, id));
   },
 
   async listWithoutFreshIptu(db, opts = {}) {

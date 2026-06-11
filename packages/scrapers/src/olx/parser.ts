@@ -55,7 +55,7 @@ export function parseOlxListingPage(html: string, ctx: ParseContext): RawListing
   const out: RawListing[] = [];
 
   const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (!match) return out;
+  if (!match || match[1] === undefined) return out;
 
   let nextData: NextData;
   try {
