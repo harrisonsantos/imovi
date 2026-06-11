@@ -47,7 +47,6 @@ const PROPERTY_TYPES: [PropertyType, string][] = [
 ];
 
 const brl  = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-const brlK = (n: number) => `R$\u00a0${(n / 1000).toFixed(0).replace('.', ',')}k`;
 
 // ── Shared input style ─────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {

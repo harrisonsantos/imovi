@@ -17,7 +17,7 @@ export async function GET(): Promise<Response> {
     const env = getRequestContext().env as Record<string, string>;
     db = getDb(env.DATABASE_URL);
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error('[api/cities] db init falhou:', err);
     return apiError(503, 'db_unavailable', 'Serviço de dados indisponível.');
   }
@@ -37,7 +37,7 @@ export async function GET(): Promise<Response> {
       },
     );
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error('[api/cities] query falhou:', err);
     return apiError(503, 'db_error', 'Erro ao consultar cidades.');
   }

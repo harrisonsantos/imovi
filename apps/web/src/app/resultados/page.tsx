@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useState, useRef } from 'react';
-import { Nav }  from '@/components/Nav';
 import { tokens as C } from '@/lib/tokens';
 
 /**

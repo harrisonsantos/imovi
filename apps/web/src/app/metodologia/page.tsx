@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { Logo } from '@/components/Logo';
 import { Nav }  from '@/components/Nav';
 import { tokens as C } from '@/lib/tokens';
 

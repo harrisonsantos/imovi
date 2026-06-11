@@ -83,7 +83,7 @@ export async function POST(req: Request): Promise<Response> {
     }
   } else if (!warnedMissingTurnstile) {
     warnedMissingTurnstile = true;
-    // eslint-disable-next-line no-console
+     
     console.warn('[api/estimate] TURNSTILE_SECRET ausente — validação anti-bot desabilitada (dev).');
   }
 
@@ -94,7 +94,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     db = getDb(cfEnv.DATABASE_URL);
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error('[api/estimate] db init falhou:', err);
     return apiError(503, 'db_unavailable', 'Serviço de dados indisponível.');
   }
@@ -192,7 +192,7 @@ export async function POST(req: Request): Promise<Response> {
     });
   } catch (err) {
     // Log mas não falha a request — estimativa é o que importa.
-    // eslint-disable-next-line no-console
+     
     console.error('[api/estimate] falha ao gravar auditoria:', err);
   }
 

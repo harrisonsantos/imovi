@@ -20,7 +20,7 @@ export async function GET(): Promise<Response> {
     await db.execute(sql`select 1`);
     dbStatus = 'ok';
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error('[api/health] db ping falhou:', err);
   }
   return Response.json({ status: 'ok', ts, db: dbStatus });

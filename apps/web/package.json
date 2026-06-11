@@ -7,7 +7,7 @@
     "build": "next build",
     "build:cf": "vercel build --yes && next-on-pages",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "pages:deploy": "wrangler pages deploy .vercel/output/static --project-name=imovi-web --account-id=f4000b2968b2834704aef648152c7dd4"
   },
@@ -30,6 +30,7 @@
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.7.0",
     "vercel": "^44.0.0",
-    "wrangler": "^3.106.0"
+    "wrangler": "^3.106.0",
+    "eslint": "^9.17.0"
   }
 }

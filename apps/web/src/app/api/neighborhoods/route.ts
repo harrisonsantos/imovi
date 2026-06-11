@@ -23,7 +23,7 @@ export async function GET(req: Request): Promise<Response> {
     const env = getRequestContext().env as Record<string, string>;
     db = getDb(env.DATABASE_URL);
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error('[api/neighborhoods] db init falhou:', err);
     return apiError(503, 'db_unavailable', 'Serviço de dados indisponível.');
   }
@@ -55,7 +55,7 @@ export async function GET(req: Request): Promise<Response> {
       },
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error('[api/neighborhoods] query falhou:', err);
     return apiError(503, 'db_error', 'Erro ao consultar bairros.');
   }
