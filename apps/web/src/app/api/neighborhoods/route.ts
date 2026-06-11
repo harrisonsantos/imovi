@@ -6,6 +6,7 @@
  */
 import { and, eq, asc } from 'drizzle-orm';
 import { neighborhoods } from '@imovi/db/schema';
+import { cityRepo } from '@imovi/db/cities';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 
@@ -16,10 +17,6 @@ export async function GET(req: Request): Promise<Response> {
   const city = url.searchParams.get('city') ?? 'Curitiba';
   const state = url.searchParams.get('state') ?? 'PR';
 
-  if (city !== 'Curitiba' || state !== 'PR') {
-    return apiError(422, 'out_of_coverage', 'MVP cobre apenas Curitiba/PR.');
-  }
-
   let db;
   try {
     const { getRequestContext } = await import('@cloudflare/next-on-pages');
@@ -29,6 +26,12 @@ export async function GET(req: Request): Promise<Response> {
     // eslint-disable-next-line no-console
     console.error('[api/neighborhoods] db init falhou:', err);
     return apiError(503, 'db_unavailable', 'Serviço de dados indisponível.');
+  }
+
+  // Cobertura dinâmica — cidade precisa existir e estar ativa em `cities`.
+  const coveredCity = await cityRepo.findByNameState(db, city, state);
+  if (!coveredCity || !coveredCity.active) {
+    return apiError(422, 'out_of_coverage', `Cidade ${city}/${state} ainda não coberta.`);
   }
 
   try {

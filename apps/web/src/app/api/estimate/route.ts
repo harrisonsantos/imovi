@@ -1,16 +1,17 @@
 /**
- * POST /api/estimate — estima o valor de um imóvel em Curitiba/PR.
+ * POST /api/estimate — estima o valor de um imóvel.
  *
  * Ordem de fallback:
  *   1. Modelo ONNX v1+ carregado do R2 `MODEL_ARTIFACTS` (quando disponível)
  *   2. Heurística determinística baseada em mediana do bairro
  *
- * Cobertura: apenas Curitiba/PR. Outras cidades retornam 422.
+ * Cobertura: cidades ativas na tabela `cities`. Demais retornam 422.
  */
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { neighborhoods } from '@imovi/db/schema';
 import { estimateRepo } from '@imovi/db/estimates';
+import { cityRepo } from '@imovi/db/cities';
 // Subpath evita puxar load.ts (que importa onnxruntime-node) pro bundle edge.
 import { estimateHeuristic } from '@imovi/ml-infer/heuristic';
 import { getDb } from '@/lib/db';
@@ -86,11 +87,6 @@ export async function POST(req: Request): Promise<Response> {
     console.warn('[api/estimate] TURNSTILE_SECRET ausente — validação anti-bot desabilitada (dev).');
   }
 
-  // MVP cobre apenas Curitiba/PR.
-  if (body.city !== 'Curitiba' || body.state !== 'PR') {
-    return apiError(422, 'out_of_coverage', 'MVP cobre apenas Curitiba/PR.');
-  }
-
   const { getRequestContext } = await import('@cloudflare/next-on-pages');
   const cfEnv = getRequestContext().env as Record<string, string>;
 
@@ -103,6 +99,12 @@ export async function POST(req: Request): Promise<Response> {
     return apiError(503, 'db_unavailable', 'Serviço de dados indisponível.');
   }
 
+  // Cobertura dinâmica — cidade precisa existir e estar ativa em `cities`.
+  const city = await cityRepo.findByNameState(db, body.city, body.state);
+  if (!city || !city.active) {
+    return apiError(422, 'out_of_coverage', `Cidade ${body.city}/${body.state} ainda não coberta.`);
+  }
+
   const [hood] = await db
     .select({
       id: neighborhoods.id,
@@ -112,8 +114,8 @@ export async function POST(req: Request): Promise<Response> {
     .from(neighborhoods)
     .where(
       and(
-        eq(neighborhoods.city, 'Curitiba'),
-        eq(neighborhoods.state, 'PR'),
+        eq(neighborhoods.city, body.city),
+        eq(neighborhoods.state, body.state),
         eq(neighborhoods.name, body.neighborhood),
       ),
     )
@@ -124,13 +126,13 @@ export async function POST(req: Request): Promise<Response> {
     const suggestions = await db
       .select({ name: neighborhoods.name })
       .from(neighborhoods)
-      .where(and(eq(neighborhoods.city, 'Curitiba'), eq(neighborhoods.state, 'PR')))
+      .where(and(eq(neighborhoods.city, body.city), eq(neighborhoods.state, body.state)))
       .orderBy(neighborhoods.name)
       .limit(5);
     return Response.json(
       {
         error: 'neighborhood_not_found',
-        message: `Bairro "${body.neighborhood}" não encontrado em Curitiba/PR.`,
+        message: `Bairro "${body.neighborhood}" não encontrado em ${body.city}/${body.state}.`,
         suggestions: suggestions.map((s) => s.name),
       },
       { status: 404 },

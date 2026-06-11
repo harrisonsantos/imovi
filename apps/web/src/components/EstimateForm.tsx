@@ -13,6 +13,12 @@ interface Neighborhood {
   medianPriceM2:  number | null;
 }
 
+interface City {
+  name:   string;
+  state:  string;
+  slug:   string;
+}
+
 interface EstimateResponse {
   estimate:         number;
   confidenceLow:    number;
@@ -74,6 +80,11 @@ const labelStyle: React.CSSProperties = {
 
 // ── Component ──────────────────────────────────────────────────────────────
 export function EstimateForm({ siteKey }: EstimateFormProps = {}) {
+  const [cities,        setCities]          = useState<City[]>([]);
+  const [selectedCity,  setSelectedCity]    = useState<City | null>(null);
+  const [loadingCities, setLoadingCities]   = useState(true);
+  const [cityError,     setCityError]       = useState<string | null>(null);
+
   const [neighborhoods, setNeighborhoods]   = useState<Neighborhood[]>([]);
   const [loadingHoods,  setLoadingHoods]    = useState(true);
   const [hoodError,     setHoodError]       = useState<string | null>(null);
@@ -98,12 +109,39 @@ export function EstimateForm({ siteKey }: EstimateFormProps = {}) {
     return () => { delete window.onTurnstileSuccess; };
   }, [turnstileEnabled]);
 
-  // Fetch neighborhoods
+  // Fetch cities (cobertas) no mount
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const res  = await fetch('/api/neighborhoods?city=Curitiba&state=PR');
+        const res  = await fetch('/api/cities');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { cities: City[] };
+        if (cancelled) return;
+        setCities(data.cities);
+        // Default: Curitiba/PR se presente, senão a primeira da lista.
+        const def = data.cities.find(c => c.name === 'Curitiba' && c.state === 'PR') ?? data.cities[0];
+        if (def) setSelectedCity(def);
+      } catch (err) {
+        if (!cancelled) setCityError((err as Error).message);
+      } finally {
+        if (!cancelled) setLoadingCities(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch neighborhoods (refeito ao trocar de cidade)
+  useEffect(() => {
+    if (!selectedCity) return;
+    let cancelled = false;
+    setLoadingHoods(true);
+    setHoodError(null);
+    setNeighborhood('');
+    void (async () => {
+      try {
+        const qs   = new URLSearchParams({ city: selectedCity.name, state: selectedCity.state });
+        const res  = await fetch(`/api/neighborhoods?${qs.toString()}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as Neighborhood[];
         if (cancelled) return;
@@ -117,7 +155,7 @@ export function EstimateForm({ siteKey }: EstimateFormProps = {}) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedCity]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -125,10 +163,11 @@ export function EstimateForm({ siteKey }: EstimateFormProps = {}) {
 
     const areaNum = Number(area);
     if (!Number.isFinite(areaNum) || areaNum <= 0) { setError('Informe uma área válida em m².'); return; }
+    if (!selectedCity) { setError('Selecione uma cidade.'); return; }
     if (!neighborhood) { setError('Selecione um bairro.'); return; }
 
     const payload: Record<string, unknown> = {
-      city: 'Curitiba', state: 'PR',
+      city: selectedCity.name, state: selectedCity.state,
       neighborhood, area: areaNum, propertyType,
     };
     if (bedrooms)  payload.bedrooms  = Number(bedrooms);
@@ -187,6 +226,31 @@ export function EstimateForm({ siteKey }: EstimateFormProps = {}) {
               </p>
 
               <form onSubmit={onSubmit} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* Cidade */}
+                <div>
+                  <label style={labelStyle}>Cidade</label>
+                  <select
+                    value={selectedCity ? selectedCity.slug : ''}
+                    onChange={e => {
+                      const next = cities.find(c => c.slug === e.target.value);
+                      if (next) setSelectedCity(next);
+                    }}
+                    disabled={loadingCities || !!cityError}
+                    required
+                    style={selectStyle}
+                    onFocus={handleFocus} onBlur={handleBlur}
+                    aria-describedby={cityError ? 'city-error' : undefined}
+                  >
+                    {loadingCities && <option>Carregando cidades…</option>}
+                    {!loadingCities && cities.map(c => (
+                      <option key={c.slug} value={c.slug} style={{ background: C.surface2 }}>
+                        {c.name} / {c.state}
+                      </option>
+                    ))}
+                  </select>
+                  {cityError && <p id="city-error" style={{ color: C.negative, fontSize: '0.8125rem', marginTop: '0.25rem' }}>Não foi possível carregar as cidades: {cityError}</p>}
+                </div>
+
                 {/* Bairro */}
                 <div>
                   <label style={labelStyle}>Bairro</label>
