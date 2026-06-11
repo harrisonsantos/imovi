@@ -4,6 +4,7 @@ import {
   listingRepo,
   propertyRepo,
   neighborhoodRepo,
+  cityRepo,
   scrapeErrorRepo,
   type DbClient,
 } from '@imovi/db';
@@ -37,20 +38,29 @@ export interface ScrapeCommandOpts {
   logger: Logger;
 }
 
+/** Job de scraping de uma cidade: location strings por portal. */
+export interface CityJob {
+  name: string;
+  state: string;
+  locations: Partial<Record<ListingSource, string>>;
+}
+
 /**
- * Config de busca por source. Cada portal formata URL-de-listagem de jeito
- * próprio — a string em `location` é interpolada direto na URL pelo adapter.
- *
- * MVP: Curitiba/PR, venda. Expansão futura passa a ler de KV/DB.
+ * Fallback quando a tabela `cities` está vazia (bootstrap/dev sem seed).
+ * Cada portal formata URL-de-listagem de jeito próprio — a string em
+ * `locations` é interpolada direto na URL pelo adapter.
  */
-const CURITIBA_JOB: Record<
-  ListingSource,
-  { location: string; operation: 'sale' | 'rent' }
-> = {
-  zap: { location: 'pr+curitiba', operation: 'sale' },
-  vivareal: { location: 'parana/curitiba', operation: 'sale' },
-  olx: { location: 'pr/cidade-curitiba', operation: 'sale' },
-};
+const DEFAULT_CITY_JOBS: CityJob[] = [
+  {
+    name: 'Curitiba',
+    state: 'PR',
+    locations: {
+      zap: 'pr+curitiba',
+      vivareal: 'parana/curitiba',
+      olx: 'pr/cidade-curitiba',
+    },
+  },
+];
 
 /** NormalizedListing → NewListing (Drizzle `numeric` espera string). */
 function toDbListingRow(
@@ -118,14 +128,14 @@ const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
  */
 function buildScraper(
   source: ListingSource,
+  location: string,
   maxPages: number,
   policyBySource: Record<ListingSource, RobotsPolicy>,
 ): ScraperFn {
-  const job = CURITIBA_JOB[source];
   const policy = policyBySource[source];
   const opts = {
-    location: job.location,
-    operation: job.operation,
+    location,
+    operation: 'sale',
     maxPages,
     robotsPolicy: policy,
   } as const;
@@ -148,6 +158,26 @@ const HOSTS: Record<ListingSource, string> = {
   olx: 'www.olx.com.br',
 };
 
+/** Resolve as cidades a scrapear: tabela `cities` ativa, com fallback default. */
+async function loadCityJobs(db: DbClient, logger: Logger): Promise<CityJob[]> {
+  try {
+    const active = await cityRepo.listActive(db);
+    if (active.length > 0) {
+      return active.map((c) => ({
+        name: c.name,
+        state: c.state,
+        locations: (c.portalLocations ?? {}) as Partial<Record<ListingSource, string>>,
+      }));
+    }
+  } catch (err) {
+    logger.warn('cities_table_unavailable', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  logger.warn('cities_fallback_default', { city: 'Curitiba' });
+  return DEFAULT_CITY_JOBS;
+}
+
 export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
   const db = createDbClient({ connectionString: opts.databaseUrl });
   const maxPages = opts.maxPagesPerSource ?? opts.pages ?? 3;
@@ -162,37 +192,67 @@ export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
     RobotsPolicy
   >;
 
-  const scrapers: Record<string, ScraperFn> = {};
-  for (const source of opts.sources) {
-    scrapers[source] = buildScraper(source, maxPages, policyBySource);
+  const cityJobs = await loadCityJobs(db, opts.logger);
+
+  const totals = {
+    scraped: 0,
+    normalized: 0,
+    rejected: 0,
+    deduped: 0,
+    persisted: 0,
+    errors: 0,
+  };
+
+  for (const job of cityJobs) {
+    const scrapers: Record<string, ScraperFn> = {};
+    for (const source of opts.sources) {
+      const location = job.locations[source];
+      if (!location) {
+        opts.logger.warn('city_missing_portal_location', { city: job.name, source });
+        continue;
+      }
+      scrapers[source] = buildScraper(source, location, maxPages, policyBySource);
+    }
+    if (Object.keys(scrapers).length === 0) continue;
+
+    opts.logger.info('scrape_command_start', {
+      sources: Object.keys(scrapers),
+      city: job.name,
+      state: job.state,
+      maxPages,
+    });
+
+    // Carrega bairros da cidade uma vez por job — usados pelo matcher de
+    // neighborhood_id no upsert de properties.
+    const neighborhoodsByCity = new Map<string, NeighborhoodCandidate[]>();
+    neighborhoodsByCity.set(
+      job.name,
+      await neighborhoodRepo.listByCity(db, job.name, job.state),
+    );
+
+    const result = await runScrape({
+      sources: Object.keys(scrapers) as ListingSource[],
+      scrapers,
+      normalize,
+      dedupe: (arr) => dedupe(arr).clusters.map((c) => c.representative),
+      db,
+      repos: {
+        listings: listingRepoAdapter,
+        properties: makePropertyRepoAdapter(neighborhoodsByCity),
+        errors: scrapeErrorRepoAdapter,
+      },
+      logger: opts.logger,
+      maxPerSource: opts.max,
+    });
+
+    opts.logger.info('scrape_city_result', { city: job.name, ...result });
+    totals.scraped += result.scraped;
+    totals.normalized += result.normalized;
+    totals.rejected += result.rejected;
+    totals.deduped += result.deduped;
+    totals.persisted += result.persisted;
+    totals.errors += result.errors;
   }
 
-  opts.logger.info('scrape_command_start', {
-    sources: opts.sources,
-    city: 'curitiba',
-    state: 'pr',
-    maxPages,
-  });
-
-  // Carrega bairros da cidade uma vez por job — usados pelo matcher de
-  // neighborhood_id no upsert de properties.
-  const neighborhoodsByCity = new Map<string, NeighborhoodCandidate[]>();
-  neighborhoodsByCity.set('Curitiba', await neighborhoodRepo.listByCity(db, 'Curitiba', 'PR'));
-
-  const result = await runScrape({
-    sources: opts.sources,
-    scrapers,
-    normalize,
-    dedupe: (arr) => dedupe(arr).clusters.map((c) => c.representative),
-    db,
-    repos: {
-      listings: listingRepoAdapter,
-      properties: makePropertyRepoAdapter(neighborhoodsByCity),
-      errors: scrapeErrorRepoAdapter,
-    },
-    logger: opts.logger,
-    maxPerSource: opts.max,
-  });
-
-  opts.logger.info('scrape_command_result', { ...result });
+  opts.logger.info('scrape_command_result', { ...totals });
 }

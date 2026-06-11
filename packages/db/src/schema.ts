@@ -20,9 +20,30 @@ import {
   timestamp,
   jsonb,
   char,
+  doublePrecision,
   uniqueIndex,
   index,
 } from 'drizzle-orm/pg-core';
+
+export const cities = pgTable(
+  'cities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    state: char('state', { length: 2 }).notNull(),
+    slug: text('slug').notNull().unique(),
+    active: boolean('active').notNull().default(false),
+    centroidLat: doublePrecision('centroid_lat'),
+    centroidLng: doublePrecision('centroid_lng'),
+    /** Strings de location por portal: {"zap": "pr+curitiba", ...} */
+    portalLocations: jsonb('portal_locations').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    nameStateUx: uniqueIndex('cities_name_state_ux2').on(t.name, t.state),
+    activeIdx: index('cities_active_idx2').on(t.active),
+  }),
+);
 
 export const neighborhoods = pgTable(
   'neighborhoods',
@@ -210,6 +231,8 @@ export const optOutRequests = pgTable(
   }),
 );
 
+export type City = typeof cities.$inferSelect;
+export type NewCity = typeof cities.$inferInsert;
 export type Property = typeof properties.$inferSelect;
 export type NewProperty = typeof properties.$inferInsert;
 export type Listing = typeof listings.$inferSelect;

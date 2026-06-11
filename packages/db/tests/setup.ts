@@ -13,7 +13,7 @@ import * as schema from '../src/schema.js';
 import type { AnyDbClient } from '../src/repositories/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATION_FILE = join(__dirname, '..', 'migrations', '0001_initial_pglite.sql');
+const MIGRATION_FILES = ['0001_initial_pglite.sql', '0002_cities_pglite.sql'];
 
 export interface TestDb {
   db: AnyDbClient;
@@ -29,9 +29,11 @@ export async function createTestDb(): Promise<TestDb> {
   const pg = new PGlite();
   await pg.waitReady;
 
-  const sql = await readFile(MIGRATION_FILE, 'utf8');
-  // pglite aceita múltiplos statements via `.exec`.
-  await pg.exec(sql);
+  for (const file of MIGRATION_FILES) {
+    const sql = await readFile(join(__dirname, '..', 'migrations', file), 'utf8');
+    // pglite aceita múltiplos statements via `.exec`.
+    await pg.exec(sql);
+  }
 
   const db = drizzle(pg, { schema }) as unknown as AnyDbClient;
 

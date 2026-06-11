@@ -6,6 +6,7 @@ export {
   type PropertyRepo,
   type UpsertFromListingOpts,
 } from './repositories/properties.js';
+export { cityRepo, type CityRepo, type PortalLocations } from './repositories/cities.js';
 export {
   neighborhoodRepo,
   type NeighborhoodRepo,

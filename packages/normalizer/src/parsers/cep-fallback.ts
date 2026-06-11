@@ -75,6 +75,45 @@ export const CURITIBA_CEP_BY_NEIGHBORHOOD: Record<string, string> = {
 const CURITIBA_CENTER_CEP = '80010-010';
 
 /**
+ * CEP do centro por cidade coberta — fallback genérico quando o endereço só
+ * tem o nome da cidade. Expandir junto com o seed de `cities`.
+ */
+export const CITY_CENTER_CEP: Record<string, { cep: string; city: string; state: string }> = {
+  'curitiba': { cep: CURITIBA_CENTER_CEP, city: 'Curitiba', state: 'PR' },
+  'porto alegre': { cep: '90010-000', city: 'Porto Alegre', state: 'RS' },
+  'florianopolis': { cep: '88010-000', city: 'Florianópolis', state: 'SC' },
+  'belo horizonte': { cep: '30110-000', city: 'Belo Horizonte', state: 'MG' },
+};
+
+export interface AddressFallback {
+  cep: string;
+  city: string;
+  state: string;
+}
+
+/**
+ * Fallback genérico de endereço: detecta a cidade coberta mencionada no
+ * addressRaw e retorna {cep, city, state} representativos. Para Curitiba,
+ * tenta primeiro o CEP específico do bairro.
+ */
+export function resolveAddressFallback(addressRaw: string): AddressFallback | undefined {
+  const folded = addressRaw
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+
+  for (const [key, entry] of Object.entries(CITY_CENTER_CEP)) {
+    if (!folded.includes(key)) continue;
+    if (entry.city === 'Curitiba') {
+      const cep = getCuritibaCepFallback(addressRaw);
+      if (cep) return { cep, city: entry.city, state: entry.state };
+    }
+    return { cep: entry.cep, city: entry.city, state: entry.state };
+  }
+  return undefined;
+}
+
+/**
  * Tenta extrair o bairro do addressRaw e retorna um CEP de fallback para
  * Curitiba/PR. Retorna o CEP do centro quando o bairro não está mapeado.
  *

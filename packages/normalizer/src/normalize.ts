@@ -5,7 +5,7 @@ import {
   type RawListing,
 } from '@imovi/shared';
 import { parseAddress } from './parsers/address.js';
-import { getCuritibaCepFallback } from './parsers/cep-fallback.js';
+import { resolveAddressFallback } from './parsers/cep-fallback.js';
 
 /**
  * Transforma RawListing → NormalizedListing.
@@ -34,10 +34,10 @@ export function normalize(raw: RawListing): NormalizedListing {
     throw new Error('normalização requer addressRaw');
   }
 
-  const cepFallback = getCuritibaCepFallback(raw.addressRaw);
+  const fallback = resolveAddressFallback(raw.addressRaw);
   const addressNormalized: NormalizedAddress | null =
     parseAddress(raw.addressRaw) ??
-    parseAddress(raw.addressRaw, { cep: cepFallback, city: 'Curitiba', state: 'PR' });
+    (fallback ? parseAddress(raw.addressRaw, fallback) : null);
   if (!addressNormalized) {
     throw new Error(`normalização falhou: endereço não parseável: "${raw.addressRaw}"`);
   }

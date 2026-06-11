@@ -1,8 +1,47 @@
 import { describe, it, expect } from 'vitest';
 import {
   getCuritibaCepFallback,
+  resolveAddressFallback,
   CURITIBA_CEP_BY_NEIGHBORHOOD,
 } from '../src/parsers/cep-fallback.js';
+
+describe('resolveAddressFallback', () => {
+  it('Curitiba com bairro mapeado → CEP do bairro', () => {
+    expect(resolveAddressFallback('Rua X - Batel, Curitiba/PR')).toEqual({
+      cep: '80420-000',
+      city: 'Curitiba',
+      state: 'PR',
+    });
+  });
+
+  it('Porto Alegre → CEP do centro', () => {
+    expect(resolveAddressFallback('Moinhos de Vento, Porto Alegre/RS')).toEqual({
+      cep: '90010-000',
+      city: 'Porto Alegre',
+      state: 'RS',
+    });
+  });
+
+  it('Florianópolis com acento → CEP do centro', () => {
+    expect(resolveAddressFallback('Trindade, Florianópolis/SC')).toEqual({
+      cep: '88010-000',
+      city: 'Florianópolis',
+      state: 'SC',
+    });
+  });
+
+  it('Belo Horizonte → CEP do centro', () => {
+    expect(resolveAddressFallback('Savassi - Belo Horizonte/MG')).toEqual({
+      cep: '30110-000',
+      city: 'Belo Horizonte',
+      state: 'MG',
+    });
+  });
+
+  it('cidade não coberta → undefined', () => {
+    expect(resolveAddressFallback('Pinheiros, São Paulo/SP')).toBeUndefined();
+  });
+});
 
 describe('getCuritibaCepFallback', () => {
   it('retorna CEP para bairro bem grafado', () => {

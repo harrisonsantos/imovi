@@ -1,0 +1,88 @@
+/**
+ * Seed de bairros de Florianópolis/SC com mediana de preço/m² (venda, apartamentos).
+ *
+ * Fonte dos números: dados públicos FIPEZAP / portais de anúncios 2025/2026.
+ * Valores são aproximações iniciais — serão sobrescritos pelo agregador
+ * assim que houver listings suficientes no banco.
+ *
+ * Idempotente: usa ON CONFLICT (city,state,name) DO UPDATE para re-rodar sem lixo.
+ *
+ * Execução: `pnpm -F @imovi/db seed:florianopolis`
+ * Requer env DATABASE_URL.
+ */
+import { sql } from 'drizzle-orm';
+import { createDbClient } from '../src/client.js';
+import { neighborhoods } from '../src/schema.js';
+
+interface SeedRow {
+  name: string;
+  medianPriceM2: number;
+}
+
+// R$/m² — apartamentos, venda, aproximações 2025/2026.
+const FLORIANOPOLIS_NEIGHBORHOODS: readonly SeedRow[] = [
+  { name: 'Jurerê Internacional', medianPriceM2: 16000 },
+  { name: 'Jurerê', medianPriceM2: 12000 },
+  { name: 'Cacupé', medianPriceM2: 11000 },
+  { name: 'Santa Mônica', medianPriceM2: 10500 },
+  { name: 'Agronômica', medianPriceM2: 10500 },
+  { name: 'Lagoa da Conceição', medianPriceM2: 10500 },
+  { name: 'João Paulo', medianPriceM2: 10000 },
+  { name: 'Centro', medianPriceM2: 10000 },
+  { name: 'Córrego Grande', medianPriceM2: 9500 },
+  { name: 'Campeche', medianPriceM2: 9500 },
+  { name: 'Trindade', medianPriceM2: 9000 },
+  { name: 'Itacorubi', medianPriceM2: 9000 },
+  { name: 'Coqueiros', medianPriceM2: 8500 },
+  { name: 'Canasvieiras', medianPriceM2: 8500 },
+  { name: 'Carvoeira', medianPriceM2: 8000 },
+  { name: 'Estreito', medianPriceM2: 7500 },
+  { name: 'Ingleses', medianPriceM2: 7500 },
+  { name: 'Pantanal', medianPriceM2: 7500 },
+  { name: 'Balneário', medianPriceM2: 7200 },
+  { name: 'Ribeirão da Ilha', medianPriceM2: 7000 },
+  { name: 'Saco dos Limões', medianPriceM2: 7000 },
+  { name: 'Abraão', medianPriceM2: 7000 },
+  { name: 'Cachoeira do Bom Jesus', medianPriceM2: 7000 },
+  { name: 'Capoeiras', medianPriceM2: 6800 },
+  { name: 'Monte Verde', medianPriceM2: 6500 },
+] as const;
+
+async function main(): Promise<void> {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL não definido no ambiente.');
+  }
+  const db = createDbClient({ connectionString });
+
+  const rows = FLORIANOPOLIS_NEIGHBORHOODS.map((n) => ({
+    city: 'Florianópolis',
+    state: 'SC',
+    name: n.name,
+    boundary: null,
+    // numeric() no drizzle aceita string; convertemos com toFixed pra evitar lixo float.
+    medianPriceM2: n.medianPriceM2.toFixed(2),
+    lastAggregatedAt: new Date(),
+  }));
+
+  // Upsert idempotente — re-rodar atualiza apenas o preço.
+  await db
+    .insert(neighborhoods)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [neighborhoods.city, neighborhoods.state, neighborhoods.name],
+      set: {
+        medianPriceM2: sql`excluded.median_price_m2`,
+        lastAggregatedAt: sql`excluded.last_aggregated_at`,
+      },
+    });
+
+  // eslint-disable-next-line no-console
+  console.log(`[seed:florianopolis] ${rows.length} bairros sincronizados.`);
+}
+
+main().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('[seed:florianopolis] falhou:', err);
+  process.exit(1);
+});
