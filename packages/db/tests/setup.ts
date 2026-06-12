@@ -13,7 +13,12 @@ import * as schema from '../src/schema.js';
 import type { AnyDbClient } from '../src/repositories/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATION_FILES = ['0001_initial_pglite.sql', '0002_cities_pglite.sql'];
+const MIGRATION_FILES = [
+  '0001_initial_pglite.sql',
+  '0002_cities_pglite.sql',
+  '0003_auth_pglite.sql',
+  '0004_audit_pglite.sql',
+];
 
 export interface TestDb {
   db: AnyDbClient;
