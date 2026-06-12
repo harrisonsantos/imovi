@@ -19,7 +19,7 @@ const nextConfig = {
   // transpilá-los. Sem isso, webpack falha a resolver os imports `.js` internos
   // dos barrels (ex.: `@imovi/db` → `./repositories/scrape-errors.js` não existe,
   // só `.ts`).
-  transpilePackages: ['@imovi/db', '@imovi/ml-infer', '@imovi/shared'],
+  transpilePackages: ['@imovi/db', '@imovi/ml-infer', '@imovi/shared', '@imovi/audit'],
 
   webpack: (config) => {
     config.resolve.extensionAlias = {

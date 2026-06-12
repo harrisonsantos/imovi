@@ -1,0 +1,12 @@
+{
+  "extends": "@imovi/config/tsconfig/node.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    // Inclui packages/db: os testes importam o harness/fontes via caminho
+    // relativo; com `noEmit` no script de typecheck isso não afeta o build.
+    "rootDir": "../..",
+    "composite": false
+  },
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["dist", "node_modules"]
+}

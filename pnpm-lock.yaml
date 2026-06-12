@@ -23,6 +23,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@imovi/audit':
+        specifier: workspace:*
+        version: link:../../packages/audit
       '@imovi/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -124,6 +127,40 @@ importers:
       wrangler:
         specifier: ^3.106.0
         version: 3.114.17(@cloudflare/workers-types@4.20260416.2)
+
+  packages/audit:
+    dependencies:
+      '@imovi/db':
+        specifier: workspace:*
+        version: link:../db
+      '@imovi/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.2.14
+        version: 0.2.17
+      '@imovi/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      drizzle-orm:
+        specifier: ^0.36.4
+        version: 0.36.4(@cloudflare/workers-types@4.20260416.2)(@electric-sql/pglite@0.2.17)(@neondatabase/serverless@0.10.4)(@types/pg@8.11.6)(@types/react@19.2.14)(kysely@0.29.2)(react@19.2.5)
+      eslint:
+        specifier: ^9.17.0
+        version: 9.39.4
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@edge-runtime/vm@3.2.0)(@types/node@22.19.17)(msw@2.13.3(@types/node@22.19.17)(typescript@5.9.3))
 
   packages/config:
     dependencies:
