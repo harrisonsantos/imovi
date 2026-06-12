@@ -1,7 +1,7 @@
 /**
  * Detector: negócio com data de fechamento no futuro.
  *
- * Portado de imobcheck/lib/detectors/anomaly-detector.ts (caso 5).
+ * Portado de detector legado do ImobCheck (caso 5).
  */
 import type { AuditNegocio } from '@imovi/db/schema-audit';
 import type { DetectedAnomalia } from './types.js';

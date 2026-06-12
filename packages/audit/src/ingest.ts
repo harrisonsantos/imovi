@@ -1,7 +1,7 @@
 /**
  * Ingestão de eventos do Vista CRM (webhook) — multi-tenant, escopada por org.
  *
- * Portado do legado imobcheck/app/api/webhooks/vista/route.ts, trocando o
+ * Portado do legado webhook legado do ImobCheck, trocando o
  * client Supabase pelos repositórios drizzle de @imovi/db/audit.
  *
  * Regras (espelham o legado):

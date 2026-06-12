@@ -1,6 +1,6 @@
 /**
  * Testes do módulo Vista — schemas zod e client HTTP puro (fetch mockado).
- * Casos de schema portados do legado imobcheck/tests/webhook-api.test.ts.
+ * Casos de schema portados do ImobCheck (projeto legado absorvido)/tests/webhook-api.test.ts.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { vistaWebhookSchema, vistaImovelSchema } from '../src/vista/types.js';

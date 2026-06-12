@@ -1,7 +1,7 @@
 /**
  * Detector: lead marcado como "perdido" em menos de 24h após a criação.
  *
- * Portado de imobcheck/lib/detectors/anomaly-detector.ts (caso 1), agora como
+ * Portado de detector legado do ImobCheck (caso 1), agora como
  * função pura sobre as linhas — sem acesso a banco.
  */
 import type { AuditLead } from '@imovi/db/schema-audit';

@@ -1,7 +1,7 @@
 /**
  * Detector: imóvel com status "vendido" sem nenhum negócio correspondente.
  *
- * Portado de imobcheck/lib/detectors/anomaly-detector.ts (caso 3) como
+ * Portado de detector legado do ImobCheck (caso 3) como
  * função pura — o cruzamento imóvel × negócio é feito em memória.
  */
 import type { AuditImovel, AuditNegocio } from '@imovi/db/schema-audit';

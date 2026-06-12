@@ -1,7 +1,7 @@
 /**
  * Detector: corretor com taxa de conversão muito abaixo da média global.
  *
- * Matemática portada de imobcheck/lib/detectors/patterns.ts +
+ * Matemática portada de ImobCheck (legado)/lib/detectors/patterns.ts +
  * anomaly-detector.ts (caso 2): taxa = negocios/leads * 100 (2 casas);
  * anômalo quando taxa < 30% da média global e o corretor tem > 10 leads.
  */

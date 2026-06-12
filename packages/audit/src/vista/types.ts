@@ -1,5 +1,5 @@
 /**
- * Schemas zod das entidades da API Vista CRM (portado do legado imobcheck).
+ * Schemas zod das entidades da API Vista CRM (portado do ImobCheck (projeto legado absorvido)).
  * Edge-safe: apenas zod, sem dependências de runtime Node.
  */
 import { z } from 'zod';

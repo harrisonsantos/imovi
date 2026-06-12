@@ -2,7 +2,7 @@
  * Testes de ingest.ts — processamento de eventos do Vista CRM, multi-tenant.
  *
  * Usa pglite (Postgres in-process) com as mesmas migrations de produção.
- * Casos portados/adaptados do legado imobcheck/tests/webhook-api.test.ts.
+ * Casos portados/adaptados do ImobCheck (projeto legado absorvido)/tests/webhook-api.test.ts.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {

@@ -2,7 +2,7 @@
  * Detector: lead "desaparecido" — sem atualização há mais de 30 dias e ainda
  * em status inicial (novo/contatado).
  *
- * Portado de imobcheck/lib/detectors/anomaly-detector.ts (caso 4).
+ * Portado de detector legado do ImobCheck (caso 4).
  */
 import type { AuditLead } from '@imovi/db/schema-audit';
 import type { DetectedAnomalia } from './types.js';
