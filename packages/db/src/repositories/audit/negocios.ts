@@ -7,7 +7,7 @@
  *     imóvel relacionado (left join — imóvel pode ser null).
  *   - Toda leitura é filtrada por org_id (isolamento multi-tenant).
  */
-import { and, eq, gte, isNotNull } from 'drizzle-orm';
+import { and, count, desc, eq, gte, isNotNull } from 'drizzle-orm';
 import {
   auditImoveis,
   auditNegocios,
@@ -30,10 +30,27 @@ export interface NegocioComImovel {
   imovel: AuditImovel | null;
 }
 
+export interface ListNegociosPageOpts {
+  limit?: number;
+  offset?: number;
+}
+
+export interface CountNegociosOpts {
+  /** Conta apenas negócios fechados (data_fechamento >= closedAfter). */
+  closedAfter?: Date;
+}
+
 export interface AuditNegociosRepo {
   upsertByVistaId(db: AnyDbClient, orgId: string, data: AuditNegocioData): Promise<AuditNegocio>;
   listByOrg(db: AnyDbClient, orgId: string, opts?: ListNegociosOpts): Promise<AuditNegocio[]>;
   listClosedWithImovel(db: AnyDbClient, orgId: string, since: Date): Promise<NegocioComImovel[]>;
+  /** Listagem paginada com o imóvel relacionado (dashboard), mais recentes primeiro. */
+  listWithImovel(
+    db: AnyDbClient,
+    orgId: string,
+    opts?: ListNegociosPageOpts,
+  ): Promise<NegocioComImovel[]>;
+  countByOrg(db: AnyDbClient, orgId: string, opts?: CountNegociosOpts): Promise<number>;
 }
 
 export const auditNegociosRepo: AuditNegociosRepo = {
@@ -86,5 +103,29 @@ export const auditNegociosRepo: AuditNegociosRepo = {
         ),
       );
     return rows;
+  },
+
+  async listWithImovel(db, orgId, opts = {}) {
+    return await db
+      .select({ negocio: auditNegocios, imovel: auditImoveis })
+      .from(auditNegocios)
+      .leftJoin(auditImoveis, eq(auditNegocios.imovelId, auditImoveis.id))
+      .where(eq(auditNegocios.orgId, orgId))
+      .orderBy(desc(auditNegocios.createdAt))
+      .limit(opts.limit ?? 100)
+      .offset(opts.offset ?? 0);
+  },
+
+  async countByOrg(db, orgId, opts = {}) {
+    const conditions = [eq(auditNegocios.orgId, orgId)];
+    if (opts.closedAfter) {
+      conditions.push(isNotNull(auditNegocios.dataFechamento));
+      conditions.push(gte(auditNegocios.dataFechamento, opts.closedAfter));
+    }
+    const rows = await db
+      .select({ total: count() })
+      .from(auditNegocios)
+      .where(and(...conditions));
+    return rows[0]?.total ?? 0;
   },
 };

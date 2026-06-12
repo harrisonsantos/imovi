@@ -5,7 +5,7 @@
  *   - Upserts idempotentes por (org_id, vista_user_id) e (org_id, creci).
  *   - Toda leitura é filtrada por org_id (isolamento multi-tenant).
  */
-import { and, eq } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import {
   auditCorretores,
   type AuditCorretor,
@@ -28,6 +28,7 @@ export interface AuditCorretoresRepo {
     data: AuditCorretorData & { creci: string },
   ): Promise<AuditCorretor>;
   listByOrg(db: AnyDbClient, orgId: string): Promise<AuditCorretor[]>;
+  countActive(db: AnyDbClient, orgId: string): Promise<number>;
   findById(db: AnyDbClient, orgId: string, id: string): Promise<AuditCorretor | null>;
 }
 
@@ -76,6 +77,14 @@ export const auditCorretoresRepo: AuditCorretoresRepo = {
       .from(auditCorretores)
       .where(eq(auditCorretores.orgId, orgId))
       .orderBy(auditCorretores.nome);
+  },
+
+  async countActive(db, orgId) {
+    const rows = await db
+      .select({ total: count() })
+      .from(auditCorretores)
+      .where(and(eq(auditCorretores.orgId, orgId), eq(auditCorretores.ativo, true)));
+    return rows[0]?.total ?? 0;
   },
 
   async findById(db, orgId, id) {

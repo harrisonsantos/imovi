@@ -7,7 +7,7 @@
  *     a mesma anomalia pode ser registrada de novo.
  *   - `resolve` é escopado por org: id de outra org não é afetado.
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull } from 'drizzle-orm';
 import { auditAnomalias, type AuditAnomalia, type NewAuditAnomalia } from '../../schema-audit.js';
 import type { AnyDbClient } from '../types.js';
 
@@ -22,12 +22,21 @@ export interface ListAnomaliasOpts {
   tipo?: string;
   limit?: number;
   offset?: number;
+  /** Ordenação por created_at; padrão 'asc' (comportamento original). */
+  order?: 'asc' | 'desc';
+}
+
+/** Contagem de anomalias não resolvidas agrupada por severidade. */
+export interface SeverityCount {
+  severidade: string;
+  total: number;
 }
 
 export interface AuditAnomaliasRepo {
   /** Insere as anomalias, pulando duplicatas não resolvidas. Retorna só as inseridas. */
   insertMany(db: AnyDbClient, orgId: string, rows: AuditAnomaliaData[]): Promise<AuditAnomalia[]>;
   listByOrg(db: AnyDbClient, orgId: string, opts?: ListAnomaliasOpts): Promise<AuditAnomalia[]>;
+  countUnresolvedBySeverity(db: AnyDbClient, orgId: string): Promise<SeverityCount[]>;
   resolve(db: AnyDbClient, orgId: string, id: string): Promise<void>;
 }
 
@@ -71,9 +80,19 @@ export const auditAnomaliasRepo: AuditAnomaliasRepo = {
       .select()
       .from(auditAnomalias)
       .where(and(...conditions))
-      .orderBy(auditAnomalias.createdAt)
+      .orderBy(
+        opts.order === 'desc' ? desc(auditAnomalias.createdAt) : auditAnomalias.createdAt,
+      )
       .limit(opts.limit ?? 100)
       .offset(opts.offset ?? 0);
+  },
+
+  async countUnresolvedBySeverity(db, orgId) {
+    return await db
+      .select({ severidade: auditAnomalias.severidade, total: count() })
+      .from(auditAnomalias)
+      .where(and(eq(auditAnomalias.orgId, orgId), eq(auditAnomalias.resolvida, false)))
+      .groupBy(auditAnomalias.severidade);
   },
 
   async resolve(db, orgId, id) {

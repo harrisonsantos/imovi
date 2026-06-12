@@ -90,6 +90,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@imovi/audit':
+        specifier: workspace:*
+        version: link:../../packages/audit
       '@imovi/db':
         specifier: workspace:*
         version: link:../../packages/db

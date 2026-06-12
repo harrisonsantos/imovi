@@ -384,3 +384,147 @@ describe('orgVistaConfigRepo', () => {
     expect(await orgVistaConfigRepo.getByWebhookToken(t.db, 'tok-inexistente')).toBeNull();
   });
 });
+
+// ───────────────────────────── Fase 6 — dashboard ─────────────────────────────
+// Métodos de listagem/contagem adicionados para o dashboard de auditoria.
+
+describe('auditLeadsRepo — paginação e contagem (dashboard)', () => {
+  it('listByOrg pagina com limit/offset quando informados', async () => {
+    for (let i = 0; i < 5; i++) {
+      await auditLeadsRepo.upsertByVistaId(t.db, ORG_A, { vistaId: `ld-${i}` });
+    }
+    const pagina1 = await auditLeadsRepo.listByOrg(t.db, ORG_A, { limit: 2, offset: 0 });
+    expect(pagina1).toHaveLength(2);
+    const pagina3 = await auditLeadsRepo.listByOrg(t.db, ORG_A, { limit: 2, offset: 4 });
+    expect(pagina3).toHaveLength(1);
+    // Sem limit → comportamento original (todas as linhas).
+    expect(await auditLeadsRepo.listByOrg(t.db, ORG_A)).toHaveLength(5);
+  });
+
+  it('countByOrg conta total e filtra por createdAfter, com isolamento de org', async () => {
+    await auditLeadsRepo.upsertByVistaId(t.db, ORG_A, { vistaId: 'ld-1' });
+    await auditLeadsRepo.upsertByVistaId(t.db, ORG_A, { vistaId: 'ld-2' });
+    await auditLeadsRepo.upsertByVistaId(t.db, ORG_B, { vistaId: 'ld-3' });
+
+    expect(await auditLeadsRepo.countByOrg(t.db, ORG_A)).toBe(2);
+    expect(await auditLeadsRepo.countByOrg(t.db, ORG_B)).toBe(1);
+
+    // createdAfter no passado → todos; no futuro → nenhum.
+    expect(
+      await auditLeadsRepo.countByOrg(t.db, ORG_A, {
+        createdAfter: new Date('2000-01-01T00:00:00Z'),
+      }),
+    ).toBe(2);
+    expect(
+      await auditLeadsRepo.countByOrg(t.db, ORG_A, {
+        createdAfter: new Date(Date.now() + 60_000),
+      }),
+    ).toBe(0);
+  });
+});
+
+describe('auditNegociosRepo — paginação e contagem (dashboard)', () => {
+  it('listWithImovel traz o imóvel, pagina e respeita org', async () => {
+    const imovel = await auditImoveisRepo.upsertByVistaId(t.db, ORG_A, {
+      vistaId: 'im-1',
+      endereco: 'Av. Y, 200',
+    });
+    await auditNegociosRepo.upsertByVistaId(t.db, ORG_A, { vistaId: 'ng-1', imovelId: imovel.id });
+    await auditNegociosRepo.upsertByVistaId(t.db, ORG_A, { vistaId: 'ng-2' });
+    await auditNegociosRepo.upsertByVistaId(t.db, ORG_B, { vistaId: 'ng-3' });
+
+    const rows = await auditNegociosRepo.listWithImovel(t.db, ORG_A);
+    expect(rows).toHaveLength(2);
+    const comImovel = rows.find((r) => r.negocio.vistaId === 'ng-1');
+    expect(comImovel?.imovel?.endereco).toBe('Av. Y, 200');
+    const semImovel = rows.find((r) => r.negocio.vistaId === 'ng-2');
+    expect(semImovel?.imovel).toBeNull();
+
+    const pagina = await auditNegociosRepo.listWithImovel(t.db, ORG_A, { limit: 1, offset: 1 });
+    expect(pagina).toHaveLength(1);
+
+    expect(await auditNegociosRepo.listWithImovel(t.db, ORG_B)).toHaveLength(1);
+  });
+
+  it('countByOrg conta total e fechados após data (closedAfter)', async () => {
+    await auditNegociosRepo.upsertByVistaId(t.db, ORG_A, { vistaId: 'ng-aberto' });
+    await auditNegociosRepo.upsertByVistaId(t.db, ORG_A, {
+      vistaId: 'ng-velho',
+      dataFechamento: new Date('2025-01-15T00:00:00Z'),
+    });
+    await auditNegociosRepo.upsertByVistaId(t.db, ORG_A, {
+      vistaId: 'ng-novo',
+      dataFechamento: new Date('2026-06-05T00:00:00Z'),
+    });
+
+    expect(await auditNegociosRepo.countByOrg(t.db, ORG_A)).toBe(3);
+    // closedAfter exclui negócios sem data_fechamento e os anteriores à data.
+    expect(
+      await auditNegociosRepo.countByOrg(t.db, ORG_A, {
+        closedAfter: new Date('2026-06-01T00:00:00Z'),
+      }),
+    ).toBe(1);
+    expect(await auditNegociosRepo.countByOrg(t.db, ORG_B)).toBe(0);
+  });
+});
+
+describe('auditAnomaliasRepo — contagem por severidade e ordenação (dashboard)', () => {
+  it('countUnresolvedBySeverity agrupa abertas por severidade e ignora resolvidas', async () => {
+    const [alta] = await auditAnomaliasRepo.insertMany(t.db, ORG_A, [
+      { tipo: 'desvio_avm', severidade: 'alta', entidadeId: 'e-1' },
+      { tipo: 'lead_inativo', severidade: 'media', entidadeId: 'e-2' },
+      { tipo: 'lead_inativo', severidade: 'media', entidadeId: 'e-3' },
+      { tipo: 'taxa_conversao_baixa', severidade: 'baixa', entidadeId: 'e-4' },
+    ]);
+    await auditAnomaliasRepo.insertMany(t.db, ORG_B, [
+      { tipo: 'desvio_avm', severidade: 'alta', entidadeId: 'e-9' },
+    ]);
+
+    const antes = await auditAnomaliasRepo.countUnresolvedBySeverity(t.db, ORG_A);
+    const mapa = Object.fromEntries(antes.map((r) => [r.severidade, r.total]));
+    expect(mapa).toEqual({ alta: 1, media: 2, baixa: 1 });
+
+    // Resolver a alta → some da contagem.
+    await auditAnomaliasRepo.resolve(t.db, ORG_A, alta!.id);
+    const depois = await auditAnomaliasRepo.countUnresolvedBySeverity(t.db, ORG_A);
+    expect(depois.find((r) => r.severidade === 'alta')).toBeUndefined();
+  });
+
+  it("listByOrg com order: 'desc' retorna mais recentes primeiro", async () => {
+    await auditAnomaliasRepo.insertMany(t.db, ORG_A, [
+      { tipo: 'desvio_avm', severidade: 'alta', entidadeId: 'e-1' },
+    ]);
+    await new Promise((r) => setTimeout(r, 10));
+    await auditAnomaliasRepo.insertMany(t.db, ORG_A, [
+      { tipo: 'lead_inativo', severidade: 'media', entidadeId: 'e-2' },
+    ]);
+
+    const descOrder = await auditAnomaliasRepo.listByOrg(t.db, ORG_A, { order: 'desc' });
+    expect(descOrder[0]!.tipo).toBe('lead_inativo');
+    const ascOrder = await auditAnomaliasRepo.listByOrg(t.db, ORG_A);
+    expect(ascOrder[0]!.tipo).toBe('desvio_avm');
+  });
+});
+
+describe('auditCorretoresRepo — countActive (dashboard)', () => {
+  it('conta apenas corretores ativos da org', async () => {
+    await auditCorretoresRepo.upsertByVistaUserId(t.db, ORG_A, {
+      nome: 'Ativo',
+      vistaUserId: 'v-1',
+      ativo: true,
+    });
+    await auditCorretoresRepo.upsertByVistaUserId(t.db, ORG_A, {
+      nome: 'Inativo',
+      vistaUserId: 'v-2',
+      ativo: false,
+    });
+    await auditCorretoresRepo.upsertByVistaUserId(t.db, ORG_B, {
+      nome: 'Outra org',
+      vistaUserId: 'v-3',
+      ativo: true,
+    });
+
+    expect(await auditCorretoresRepo.countActive(t.db, ORG_A)).toBe(1);
+    expect(await auditCorretoresRepo.countActive(t.db, ORG_B)).toBe(1);
+  });
+});
