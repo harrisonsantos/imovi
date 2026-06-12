@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { fetchAuditoria } from '@/lib/auditoria-fetch';
 import { tokens as C } from '@/lib/tokens';
 
 interface ConfigResponse {
@@ -63,7 +64,7 @@ export default function ConfiguracaoPage() {
     let active = true;
     (async () => {
       try {
-        const res = await fetch('/api/auditoria/config');
+        const res = await fetchAuditoria('/api/auditoria/config');
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { message?: string } | null;
           if (active) setError(body?.message ?? 'Falha ao carregar configuração.');
@@ -105,7 +106,7 @@ export default function ConfiguracaoPage() {
       // Só envia a key se o usuário digitou uma nova (nunca reenviamos a atual).
       if (vistaApiKey.trim()) payload.vistaApiKey = vistaApiKey.trim();
 
-      const res = await fetch('/api/auditoria/config', {
+      const res = await fetchAuditoria('/api/auditoria/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

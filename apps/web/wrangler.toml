@@ -31,6 +31,15 @@ binding     = "MODEL_ARTIFACTS"
 bucket_name = "imovi-model-artifacts"
 
 # ---------------------------------------------------------------------------
+# R2 — documentos de matrícula enviados pelo dashboard de auditoria
+# (POST /api/auditoria/matricula/upload). Crie o bucket com
+# `wrangler r2 bucket create imovi-matriculas` antes do primeiro deploy.
+# ---------------------------------------------------------------------------
+[[r2_buckets]]
+binding     = "MATRICULAS"
+bucket_name = "imovi-matriculas"
+
+# ---------------------------------------------------------------------------
 # Ambientes
 # ---------------------------------------------------------------------------
 [env.preview]

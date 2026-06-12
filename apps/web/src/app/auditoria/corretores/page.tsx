@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { DataTable, type Column } from '@/components/auditoria/DataTable';
+import { fetchAuditoria } from '@/lib/auditoria-fetch';
 import { tokens as C } from '@/lib/tokens';
 
 interface Corretor {
@@ -25,7 +26,7 @@ export default function CorretoresPage() {
     let active = true;
     (async () => {
       try {
-        const res = await fetch('/api/auditoria/corretores');
+        const res = await fetchAuditoria('/api/auditoria/corretores');
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { message?: string } | null;
           if (active) setError(body?.message ?? 'Falha ao carregar corretores.');

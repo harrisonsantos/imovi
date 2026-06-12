@@ -10,6 +10,7 @@ import { DataTable, type Column } from '@/components/auditoria/DataTable';
 import { ExportCsvButton } from '@/components/auditoria/ExportCsvButton';
 import { Paginator } from '@/components/auditoria/Paginator';
 import { SeverityChip } from '@/components/auditoria/SeverityChip';
+import { fetchAuditoria } from '@/lib/auditoria-fetch';
 import { ANOMALIA_TIPO_LABELS, anomaliaTipoLabel, fmtDateTime } from '@/lib/auditoria-format';
 import { tokens as C } from '@/lib/tokens';
 
@@ -53,7 +54,7 @@ export default function AnomaliasPage() {
       const params = new URLSearchParams({ limit: String(LIMIT), offset: String(offset) });
       if (tipo) params.set('tipo', tipo);
       if (resolvida !== 'todas') params.set('resolvida', String(resolvida === 'resolvidas'));
-      const res = await fetch(`/api/auditoria/anomalias?${params}`);
+      const res = await fetchAuditoria(`/api/auditoria/anomalias?${params}`);
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { message?: string } | null;
         setError(body?.message ?? 'Falha ao carregar anomalias.');
@@ -75,7 +76,7 @@ export default function AnomaliasPage() {
   async function handleResolve(id: string) {
     setResolvingId(id);
     try {
-      const res = await fetch('/api/auditoria/anomalias', {
+      const res = await fetchAuditoria('/api/auditoria/anomalias', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),

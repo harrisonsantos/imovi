@@ -17,6 +17,7 @@ import {
   auditNegociosRepo,
   auditAnomaliasRepo,
   auditEventosRepo,
+  auditMatriculasRepo,
   orgVistaConfigRepo,
 } from '../src/repositories/audit/index.js';
 
@@ -526,5 +527,124 @@ describe('auditCorretoresRepo — countActive (dashboard)', () => {
 
     expect(await auditCorretoresRepo.countActive(t.db, ORG_A)).toBe(1);
     expect(await auditCorretoresRepo.countActive(t.db, ORG_B)).toBe(1);
+  });
+});
+
+describe('auditMatriculasRepo — uploads de matrícula (R2)', () => {
+  /** Cria um imóvel da org para amarrar as matrículas (FK obrigatória). */
+  async function criaImovel(orgId: string, vistaId: string) {
+    return await auditImoveisRepo.upsertByVistaId(t.db, orgId, {
+      vistaId,
+      endereco: `Rua ${vistaId}`,
+    });
+  }
+
+  it('insert grava a linha e devolve campos preenchidos', async () => {
+    const imovel = await criaImovel(ORG_A, 'im-mat-1');
+    const row = await auditMatriculasRepo.insert(t.db, ORG_A, {
+      imovelId: imovel.id,
+      r2Key: `org-a/${imovel.id}/abc-doc.pdf`,
+      fileName: 'doc.pdf',
+      mime: 'application/pdf',
+      size: 1234,
+      uploadedBy: 'user-1',
+    });
+    expect(row.id).toBeTruthy();
+    expect(row.orgId).toBe(ORG_A);
+    expect(row.imovelId).toBe(imovel.id);
+    expect(row.r2Key).toContain('doc.pdf');
+    expect(row.size).toBe(1234);
+    expect(row.checkedAt).toBeNull();
+    expect(row.resultado).toBeNull();
+    expect(row.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('listByOrg isola por org e filtra por imovelId', async () => {
+    const imovelA1 = await criaImovel(ORG_A, 'im-mat-a1');
+    const imovelA2 = await criaImovel(ORG_A, 'im-mat-a2');
+    const imovelB = await criaImovel(ORG_B, 'im-mat-b1');
+    const base = { fileName: 'm.pdf', mime: 'application/pdf', size: 10 };
+    await auditMatriculasRepo.insert(t.db, ORG_A, { ...base, imovelId: imovelA1.id, r2Key: 'k1' });
+    await auditMatriculasRepo.insert(t.db, ORG_A, { ...base, imovelId: imovelA2.id, r2Key: 'k2' });
+    await auditMatriculasRepo.insert(t.db, ORG_B, { ...base, imovelId: imovelB.id, r2Key: 'k3' });
+
+    expect(await auditMatriculasRepo.listByOrg(t.db, ORG_A)).toHaveLength(2);
+    expect(await auditMatriculasRepo.listByOrg(t.db, ORG_B)).toHaveLength(1);
+
+    const filtrado = await auditMatriculasRepo.listByOrg(t.db, ORG_A, { imovelId: imovelA1.id });
+    expect(filtrado).toHaveLength(1);
+    expect(filtrado[0]!.r2Key).toBe('k1');
+
+    // Paginação: limit/offset.
+    const pagina = await auditMatriculasRepo.listByOrg(t.db, ORG_A, { limit: 1, offset: 1 });
+    expect(pagina).toHaveLength(1);
+  });
+
+  it('findById só encontra dentro da própria org', async () => {
+    const imovel = await criaImovel(ORG_A, 'im-mat-find');
+    const row = await auditMatriculasRepo.insert(t.db, ORG_A, {
+      imovelId: imovel.id,
+      r2Key: 'k-find',
+      fileName: 'f.png',
+      mime: 'image/png',
+      size: 1,
+    });
+    expect((await auditMatriculasRepo.findById(t.db, ORG_A, row.id))?.id).toBe(row.id);
+    // Outra org não enxerga o registro (isolamento multi-tenant).
+    expect(await auditMatriculasRepo.findById(t.db, ORG_B, row.id)).toBeNull();
+  });
+
+  it('setChecked grava resultado + checked_at, escopado por org', async () => {
+    const imovel = await criaImovel(ORG_A, 'im-mat-check');
+    const row = await auditMatriculasRepo.insert(t.db, ORG_A, {
+      imovelId: imovel.id,
+      r2Key: 'k-check',
+      fileName: 'f.pdf',
+      mime: 'application/pdf',
+      size: 1,
+    });
+
+    // Org errada não marca nada.
+    await auditMatriculasRepo.setChecked(t.db, ORG_B, row.id, { status: 'x' });
+    expect((await auditMatriculasRepo.findById(t.db, ORG_A, row.id))?.checkedAt).toBeNull();
+
+    const resultado = { status: 'verificacao_manual_pendente', checkedVia: 'manual' };
+    await auditMatriculasRepo.setChecked(t.db, ORG_A, row.id, resultado);
+    const depois = await auditMatriculasRepo.findById(t.db, ORG_A, row.id);
+    expect(depois?.checkedAt).toBeInstanceOf(Date);
+    expect(depois?.resultado).toEqual(resultado);
+  });
+
+  it('apagar o imóvel apaga as matrículas (ON DELETE CASCADE)', async () => {
+    const imovel = await criaImovel(ORG_A, 'im-mat-cascade');
+    await auditMatriculasRepo.insert(t.db, ORG_A, {
+      imovelId: imovel.id,
+      r2Key: 'k-casc',
+      fileName: 'f.pdf',
+      mime: 'application/pdf',
+      size: 1,
+    });
+    await t.raw.exec(`DELETE FROM audit_imoveis WHERE id = '${imovel.id}'`);
+    expect(await auditMatriculasRepo.listByOrg(t.db, ORG_A)).toHaveLength(0);
+  });
+});
+
+describe('auditImoveisRepo — findById e setMatriculaVerificada (fluxo matrícula)', () => {
+  it('findById só encontra dentro da própria org', async () => {
+    const imovel = await auditImoveisRepo.upsertByVistaId(t.db, ORG_A, { vistaId: 'im-fid' });
+    expect((await auditImoveisRepo.findById(t.db, ORG_A, imovel.id))?.id).toBe(imovel.id);
+    expect(await auditImoveisRepo.findById(t.db, ORG_B, imovel.id)).toBeNull();
+  });
+
+  it('setMatriculaVerificada marca o flag, escopado por org', async () => {
+    const imovel = await auditImoveisRepo.upsertByVistaId(t.db, ORG_A, { vistaId: 'im-mv' });
+    expect(imovel.matriculaVerificada).toBe(false);
+
+    // Org errada não altera.
+    await auditImoveisRepo.setMatriculaVerificada(t.db, ORG_B, imovel.id, true);
+    expect((await auditImoveisRepo.findById(t.db, ORG_A, imovel.id))?.matriculaVerificada).toBe(false);
+
+    await auditImoveisRepo.setMatriculaVerificada(t.db, ORG_A, imovel.id, true);
+    expect((await auditImoveisRepo.findById(t.db, ORG_A, imovel.id))?.matriculaVerificada).toBe(true);
   });
 });

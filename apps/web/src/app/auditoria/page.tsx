@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/auditoria/Card';
 import { SeverityChip } from '@/components/auditoria/SeverityChip';
+import { fetchAuditoria } from '@/lib/auditoria-fetch';
 import { anomaliaTipoLabel, fmtDateTime } from '@/lib/auditoria-format';
 import { tokens as C } from '@/lib/tokens';
 
@@ -38,8 +39,8 @@ export default function AuditoriaOverviewPage() {
   const load = useCallback(async () => {
     try {
       const [mRes, aRes] = await Promise.all([
-        fetch('/api/auditoria/metrics'),
-        fetch('/api/auditoria/anomalias?resolvida=false&limit=8'),
+        fetchAuditoria('/api/auditoria/metrics'),
+        fetchAuditoria('/api/auditoria/anomalias?resolvida=false&limit=8'),
       ]);
       if (!mRes.ok || !aRes.ok) {
         const body = (await (mRes.ok ? aRes : mRes).json().catch(() => null)) as {
@@ -65,7 +66,7 @@ export default function AuditoriaOverviewPage() {
   async function handleResolve(id: string) {
     setResolvingId(id);
     try {
-      const res = await fetch('/api/auditoria/anomalias', {
+      const res = await fetchAuditoria('/api/auditoria/anomalias', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),

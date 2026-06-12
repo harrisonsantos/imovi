@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type Column } from '@/components/auditoria/DataTable';
 import { ExportCsvButton } from '@/components/auditoria/ExportCsvButton';
 import { Paginator } from '@/components/auditoria/Paginator';
+import { fetchAuditoria } from '@/lib/auditoria-fetch';
 import { fmtBrl, fmtDate } from '@/lib/auditoria-format';
 import { tokens as C } from '@/lib/tokens';
 
@@ -41,7 +42,7 @@ export default function NegociosPage() {
     let active = true;
     (async () => {
       try {
-        const res = await fetch('/api/auditoria/corretores');
+        const res = await fetchAuditoria('/api/auditoria/corretores');
         if (!res.ok || !active) return;
         const data = (await res.json()) as { corretores: Corretor[] };
         setCorretores(Object.fromEntries(data.corretores.map((c) => [c.id, c.nome])));
@@ -57,7 +58,7 @@ export default function NegociosPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/auditoria/negocios?limit=${LIMIT}&offset=${offset}`);
+      const res = await fetchAuditoria(`/api/auditoria/negocios?limit=${LIMIT}&offset=${offset}`);
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { message?: string } | null;
         setError(body?.message ?? 'Falha ao carregar negócios.');

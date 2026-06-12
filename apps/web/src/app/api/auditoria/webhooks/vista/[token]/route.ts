@@ -9,6 +9,7 @@
 import { vistaWebhookSchema } from '@imovi/audit/vista';
 import { processVistaEvent } from '@imovi/audit/ingest';
 import { orgVistaConfigRepo } from '@imovi/db/audit';
+import { orgRepo } from '@imovi/db/orgs';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 
@@ -41,6 +42,12 @@ export async function POST(
     return apiError(404, 'not_found', 'Webhook não encontrado.');
   }
 
+  // IMPORTANTE: NÃO chamar assertOrgAccess aqui. A ingestão de dados continua
+  // funcionando após o fim do trial (graça de dados de 30 dias) — apenas o
+  // dashboard é bloqueado pelo gate em requireOrg. O limite de corretores do
+  // plano é aplicado como aviso (warn, don't drop) via maxCorretores abaixo.
+  const org = await orgRepo.findById(db, config.orgId);
+
   let json: unknown;
   try {
     json = await req.json();
@@ -53,12 +60,16 @@ export async function POST(
     return apiError(400, 'invalid_payload', 'Payload de webhook inválido.', parsed.error.flatten());
   }
 
+  let limitWarning = false;
   try {
-    await processVistaEvent(db, config.orgId, parsed.data);
+    const result = await processVistaEvent(db, config.orgId, parsed.data, {
+      maxCorretores: org?.maxCorretores ?? null,
+    });
+    limitWarning = result.limitWarning;
   } catch (err) {
     console.error('[webhooks/vista] processamento falhou:', err);
     return apiError(500, 'processing_failed', 'Falha ao processar evento.');
   }
 
-  return Response.json({ success: true });
+  return Response.json({ success: true, ...(limitWarning ? { limitWarning: true } : {}) });
 }

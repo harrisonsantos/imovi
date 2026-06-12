@@ -21,6 +21,14 @@ export interface AuditImoveisRepo {
   upsertByVistaId(db: AnyDbClient, orgId: string, data: AuditImovelData): Promise<AuditImovel>;
   listByOrg(db: AnyDbClient, orgId: string, opts?: ListImoveisOpts): Promise<AuditImovel[]>;
   findByVistaId(db: AnyDbClient, orgId: string, vistaId: string): Promise<AuditImovel | null>;
+  findById(db: AnyDbClient, orgId: string, id: string): Promise<AuditImovel | null>;
+  /** Marca/desmarca o flag de matrícula verificada (fluxo de matrículas). */
+  setMatriculaVerificada(
+    db: AnyDbClient,
+    orgId: string,
+    id: string,
+    verificada: boolean,
+  ): Promise<void>;
 }
 
 export const auditImoveisRepo: AuditImoveisRepo = {
@@ -62,5 +70,21 @@ export const auditImoveisRepo: AuditImoveisRepo = {
       .where(and(eq(auditImoveis.orgId, orgId), eq(auditImoveis.vistaId, vistaId)))
       .limit(1);
     return rows[0] ?? null;
+  },
+
+  async findById(db, orgId, id) {
+    const rows = await db
+      .select()
+      .from(auditImoveis)
+      .where(and(eq(auditImoveis.orgId, orgId), eq(auditImoveis.id, id)))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  async setMatriculaVerificada(db, orgId, id, verificada) {
+    await db
+      .update(auditImoveis)
+      .set({ matriculaVerificada: verificada, updatedAt: new Date() })
+      .where(and(eq(auditImoveis.orgId, orgId), eq(auditImoveis.id, id)));
   },
 };

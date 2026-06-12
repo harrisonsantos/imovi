@@ -7,4 +7,5 @@ export * from './leads.js';
 export * from './negocios.js';
 export * from './anomalias.js';
 export * from './eventos.js';
+export * from './matriculas.js';
 export * from './org-config.js';

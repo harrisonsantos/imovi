@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/auditoria/negocios', label: 'Negócios' },
   { href: '/auditoria/leads', label: 'Leads' },
   { href: '/auditoria/corretores', label: 'Corretores' },
+  { href: '/auditoria/matriculas', label: 'Matrículas' },
   { href: '/auditoria/configuracao', label: 'Configuração' },
 ] as const;
 

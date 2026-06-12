@@ -147,6 +147,33 @@ export const auditEventos = pgTable(
   }),
 );
 
+/**
+ * Documentos de matrícula enviados ao R2 (bucket MATRICULAS). O binário fica
+ * no R2 sob `r2_key`; aqui guardamos metadados + auditoria da verificação
+ * manual (`checked_at`/`resultado`).
+ */
+export const auditMatriculas = pgTable(
+  'audit_matriculas',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: text('org_id').notNull(),
+    imovelId: uuid('imovel_id')
+      .notNull()
+      .references(() => auditImoveis.id, { onDelete: 'cascade' }),
+    r2Key: text('r2_key').notNull(),
+    fileName: text('file_name').notNull(),
+    mime: text('mime').notNull(),
+    size: integer('size').notNull(),
+    uploadedBy: text('uploaded_by'),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+    resultado: jsonb('resultado'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgImovelIdx: index('audit_matriculas_org_imovel_idx').on(t.orgId, t.imovelId),
+  }),
+);
+
 export const orgVistaConfig = pgTable('org_vista_config', {
   id: uuid('id').primaryKey().defaultRandom(),
   orgId: text('org_id').notNull().unique(),
@@ -172,5 +199,7 @@ export type AuditAnomalia = typeof auditAnomalias.$inferSelect;
 export type NewAuditAnomalia = typeof auditAnomalias.$inferInsert;
 export type AuditEvento = typeof auditEventos.$inferSelect;
 export type NewAuditEvento = typeof auditEventos.$inferInsert;
+export type AuditMatricula = typeof auditMatriculas.$inferSelect;
+export type NewAuditMatricula = typeof auditMatriculas.$inferInsert;
 export type OrgVistaConfig = typeof orgVistaConfig.$inferSelect;
 export type NewOrgVistaConfig = typeof orgVistaConfig.$inferInsert;

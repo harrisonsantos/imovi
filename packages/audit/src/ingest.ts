@@ -99,11 +99,37 @@ async function resolveCorretorFromImovel(
   return null;
 }
 
-async function processarImovel(db: AnyDbClient, orgId: string, data: Dados): Promise<void> {
+/**
+ * Processa um imóvel e retorna se a auto-criação de corretor estourou o
+ * limite do plano (warn, don't drop — o corretor É criado mesmo assim).
+ */
+async function processarImovel(
+  db: AnyDbClient,
+  orgId: string,
+  data: Dados,
+  maxCorretores?: number | null,
+): Promise<boolean> {
   const vistaId = asStr(data.Codigo);
-  if (!vistaId) return;
+  if (!vistaId) return false;
+
+  // Conta antes/depois para detectar criação de corretor NOVO acima do limite.
+  const antes =
+    maxCorretores != null ? (await auditCorretoresRepo.listByOrg(db, orgId)).length : 0;
 
   const corretorId = await resolveCorretorFromImovel(db, orgId, data);
+
+  let limitWarning = false;
+  if (maxCorretores != null) {
+    const depois = (await auditCorretoresRepo.listByOrg(db, orgId)).length;
+    if (depois > antes && depois > maxCorretores) {
+      limitWarning = true;
+      await auditEventosRepo.record(db, orgId, {
+        tipo: 'limite_corretores_excedido',
+        fonte: 'vista_webhook',
+        dados: { maxCorretores, totalCorretores: depois },
+      });
+    }
+  }
 
   // Endereço completo a partir das partes disponíveis.
   const endereco =
@@ -121,6 +147,8 @@ async function processarImovel(db: AnyDbClient, orgId: string, data: Dados): Pro
     matricula: asStr(data.Matricula),
     status: asStr(data.Status)?.toLowerCase() ?? 'ativo',
   });
+
+  return limitWarning;
 }
 
 async function processarLead(db: AnyDbClient, orgId: string, data: Dados): Promise<void> {
@@ -191,19 +219,37 @@ async function processarNegocio(db: AnyDbClient, orgId: string, data: Dados): Pr
   });
 }
 
+/** Opções de processamento (limites do plano da org). */
+export interface ProcessVistaEventOptions {
+  /** Limite de corretores do plano; null/undefined = ilimitado. */
+  maxCorretores?: number | null;
+}
+
+/** Resultado do processamento de um evento de webhook. */
+export interface ProcessVistaEventResult {
+  /** Evento bruto registrado em audit_eventos. */
+  evento: AuditEvento;
+  /** true quando a auto-criação de corretor excedeu maxCorretores. */
+  limitWarning: boolean;
+}
+
 /**
  * Processa um evento de webhook do Vista para a org informada e registra
- * o evento bruto em audit_eventos. Retorna o evento registrado.
+ * o evento bruto em audit_eventos. Retorna o evento registrado e se o
+ * limite de corretores do plano foi excedido (warn, don't drop).
  */
 export async function processVistaEvent(
   db: AnyDbClient,
   orgId: string,
   payload: VistaWebhook,
-): Promise<AuditEvento> {
+  opts: ProcessVistaEventOptions = {},
+): Promise<ProcessVistaEventResult> {
+  let limitWarning = false;
+
   switch (payload.event_type) {
     case 'imovel.criado':
     case 'imovel.atualizado':
-      await processarImovel(db, orgId, payload.data);
+      limitWarning = await processarImovel(db, orgId, payload.data, opts.maxCorretores);
       break;
     case 'lead.criado':
     case 'lead.atualizado':
@@ -218,9 +264,11 @@ export async function processVistaEvent(
   }
 
   // Log append-only do evento bruto (mesmo quando o payload é incompleto).
-  return auditEventosRepo.record(db, orgId, {
+  const evento = await auditEventosRepo.record(db, orgId, {
     tipo: payload.event_type,
     fonte: 'vista_webhook',
     dados: payload,
   });
+
+  return { evento, limitWarning };
 }

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DataTable, type Column } from '@/components/auditoria/DataTable';
 import { ExportCsvButton } from '@/components/auditoria/ExportCsvButton';
 import { Paginator } from '@/components/auditoria/Paginator';
+import { fetchAuditoria } from '@/lib/auditoria-fetch';
 import { fmtDateTime } from '@/lib/auditoria-format';
 import { tokens as C } from '@/lib/tokens';
 
@@ -65,7 +66,7 @@ export default function LeadsPage() {
     let active = true;
     (async () => {
       try {
-        const res = await fetch('/api/auditoria/corretores');
+        const res = await fetchAuditoria('/api/auditoria/corretores');
         if (!res.ok || !active) return;
         const data = (await res.json()) as { corretores: Corretor[] };
         setCorretores(Object.fromEntries(data.corretores.map((c) => [c.id, c.nome])));
@@ -83,7 +84,7 @@ export default function LeadsPage() {
     try {
       const params = new URLSearchParams({ limit: String(LIMIT), offset: String(offset) });
       if (status) params.set('status', status);
-      const res = await fetch(`/api/auditoria/leads?${params}`);
+      const res = await fetchAuditoria(`/api/auditoria/leads?${params}`);
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { message?: string } | null;
         setError(body?.message ?? 'Falha ao carregar leads.');
