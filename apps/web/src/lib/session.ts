@@ -66,7 +66,7 @@ export async function requireSession(
 }
 
 /** Status de org que permitem acesso ao módulo de auditoria. */
-const ACTIVE_STATUSES = new Set(['trial', 'active']);
+const ACTIVE_STATUSES = new Set(['trial', 'active', 'past_due']);
 
 /**
  * Gate de acesso puro (testável sem better-auth/DB): valida status e trial.
@@ -96,7 +96,10 @@ export function assertOrgAccess(
   }
 }
 
-export async function requireOrg(
+/** Resolve a organização da sessão sem aplicar o gate de assinatura.
+ * Usado por checkout/portal para que um trial expirado ainda consiga pagar.
+ */
+export async function requireOrgIdentity(
   req: Request,
   env: AuthEnv = {},
 ): Promise<OrgSessionInfo> {
@@ -115,9 +118,16 @@ export async function requireOrg(
     throw new SessionError(403, 'no_organization', 'Organização não encontrada.');
   }
 
-  assertOrgAccess(org);
-
   return { ...session, org };
+}
+
+export async function requireOrg(
+  req: Request,
+  env: AuthEnv = {},
+): Promise<OrgSessionInfo> {
+  const info = await requireOrgIdentity(req, env);
+  assertOrgAccess(info.org);
+  return info;
 }
 
 /** Converte SessionError em Response padronizada; repassa outros erros. */

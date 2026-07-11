@@ -187,6 +187,14 @@ export default function CadastroPage() {
             />
           </div>
 
+          <label style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start', color: C.text2, fontSize: '0.75rem', lineHeight: 1.5 }}>
+            <input type="checkbox" required style={{ marginTop: '0.2rem' }} />
+            <span>
+              Li e aceito os <Link href="/termos" target="_blank" style={{ color: C.accent }}>Termos de uso</Link>{' '}
+              e a <Link href="/privacidade" target="_blank" style={{ color: C.accent }}>Política de privacidade</Link>.
+            </span>
+          </label>
+
           {error && (
             <p style={{ color: C.negative, fontSize: '0.8125rem', margin: 0 }}>{error}</p>
           )}

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { users, organizations, members } from '../src/schema-auth.js';
+import { users, organizations, members, billingEvents } from '../src/schema-auth.js';
 import { createTestDb, type TestDb } from './setup.js';
 
 describe('tabelas de auth (better-auth + organizations)', () => {
@@ -24,6 +24,16 @@ describe('tabelas de auth (better-auth + organizations)', () => {
     expect(org!.status).toBe('trial');
     expect(org!.maxCorretores).toBeNull();
     expect(org!.trialEndsAt).toBeNull();
+    expect(org!.stripeCustomerId).toBeNull();
+    expect(org!.stripeSubscriptionId).toBeNull();
+    expect(org!.cancelAtPeriodEnd).toBe(false);
+  });
+
+  it('billing event id é único para idempotência de webhook', async () => {
+    await t.db.insert(billingEvents).values({ id: 'evt_1', type: 'invoice.paid' });
+    await expect(
+      t.db.insert(billingEvents).values({ id: 'evt_1', type: 'invoice.paid' }),
+    ).rejects.toThrow();
   });
 
   it('member liga user a organization e respeita unique (org, user)', async () => {

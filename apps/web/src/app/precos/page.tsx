@@ -38,8 +38,8 @@ const PLANS = [
   },
 ];
 
-const AUDIT_MAILTO = (tier: string) =>
-  `mailto:hrrsnp@gmail.com?subject=${encodeURIComponent(`Imovi Auditoria — ${tier}`)}`;
+const AUDIT_SIGNUP = (planId: string) =>
+  `/auditoria/cadastro?plan=${encodeURIComponent(planId)}`;
 
 const AUDIT_PLANS = [
   {
@@ -158,11 +158,11 @@ export default function PrecosPage() {
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: '2.25rem', fontWeight: 500, letterSpacing: '-0.03em', color: C.text }}>R$&nbsp;{p.price}<span style={{ fontSize: '1rem', color: C.text2 }}>/mês</span></div>
                   <div style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: C.accent, marginTop: '0.375rem' }}>{p.limite}</div>
                 </div>
-                <a href={AUDIT_MAILTO(p.name)} style={{ display: 'block', width: '100%', padding: '0.8125rem', background: p.highlight ? C.accent : C.accentDim, border: `1px solid ${p.highlight ? C.accent : C.accentMid}`, color: p.highlight ? '#000' : C.accent, textDecoration: 'none', textAlign: 'center', fontSize: '0.9375rem', fontWeight: 700, borderRadius: '9px', transition: 'all 0.15s', marginBottom: '1.75rem' }}
+                <Link href={AUDIT_SIGNUP(p.id)} style={{ display: 'block', width: '100%', padding: '0.8125rem', background: p.highlight ? C.accent : C.accentDim, border: `1px solid ${p.highlight ? C.accent : C.accentMid}`, color: p.highlight ? '#000' : C.accent, textDecoration: 'none', textAlign: 'center', fontSize: '0.9375rem', fontWeight: 700, borderRadius: '9px', transition: 'all 0.15s', marginBottom: '1.75rem' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; if (!p.highlight) (e.currentTarget as HTMLElement).style.background = C.accentMid; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; if (!p.highlight) (e.currentTarget as HTMLElement).style.background = C.accentDim; }}>
-                  Falar com vendas
-                </a>
+                  Começar 14 dias grátis
+                </Link>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {p.features.map((f, i) => (
                     <div key={i} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start' }}><span style={{ color: C.accent, flexShrink: 0, marginTop: '1px' }}>{CHECK}</span><span style={{ fontSize: '0.875rem', color: C.text2, lineHeight: 1.5 }}>{f}</span></div>

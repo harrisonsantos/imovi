@@ -9,18 +9,18 @@ const LINKS: [string, [string, string][]][] = [
     ['Como funciona', '/#como-funciona'],
     ['Metodologia',   '/metodologia'],
     ['Planos',        '/precos'],
-    ['Dashboard',     '/dashboard'],
+    ['Preço do m²',   '/valor-imovel'],
   ]],
   ['Cidades', [
-    ['Curitiba/PR',             '/#estimar'],
-    ['São Paulo (em breve)',     '#'],
-    ['Porto Alegre',            '#'],
-    ['Florianópolis',           '#'],
+    ['Curitiba/PR',       '/valor-imovel/curitiba-pr'],
+    ['Belo Horizonte/MG', '/valor-imovel/belo-horizonte-mg'],
+    ['Porto Alegre/RS',   '/valor-imovel/porto-alegre-rs'],
+    ['Florianópolis/SC',  '/valor-imovel/florianopolis-sc'],
   ]],
   ['Legal', [
-    ['Privacidade',  '#'],
-    ['Termos de uso','#'],
-    ['Contato',      '#'],
+    ['Privacidade',  '/privacidade'],
+    ['Termos de uso','/termos'],
+    ['Contato',      'mailto:hrrsnp@gmail.com'],
   ]],
 ];
 

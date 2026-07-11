@@ -15,6 +15,7 @@
     "./audit": "./src/repositories/audit/index.ts",
     "./schema-audit": "./src/schema-audit.ts",
     "./orgs": "./src/repositories/orgs.ts",
+    "./billing": "./src/repositories/billing.ts",
     "./operators": "./src/operators.ts"
   },
   "scripts": {

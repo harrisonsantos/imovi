@@ -9,7 +9,7 @@ const NAV_LINKS: [string, string][] = [
   ['Como funciona', '/#como-funciona'],
   ['Metodologia',   '/metodologia'],
   ['Preços',        '/precos'],
-  ['Dashboard',     '/dashboard'],
+  ['Preço do m²',   '/valor-imovel'],
 ];
 
 export function Nav() {

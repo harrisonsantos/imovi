@@ -105,12 +105,30 @@ export const organizations = pgTable(
     status: text('status').notNull().default('trial'),
     maxCorretores: integer('max_corretores'),
     trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
+    stripeCustomerId: text('stripe_customer_id'),
+    stripeSubscriptionId: text('stripe_subscription_id'),
+    subscriptionCurrentPeriodEnd: timestamp('subscription_current_period_end', {
+      withTimezone: true,
+    }),
+    cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+    billingUpdatedAt: timestamp('billing_updated_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     slugUx: uniqueIndex('organizations_slug_ux').on(t.slug),
+    stripeCustomerUx: uniqueIndex('organizations_stripe_customer_ux').on(t.stripeCustomerId),
+    stripeSubscriptionUx: uniqueIndex('organizations_stripe_subscription_ux').on(
+      t.stripeSubscriptionId,
+    ),
   }),
 );
+
+/** Eventos Stripe já consumidos; impede efeitos duplicados em retries. */
+export const billingEvents = pgTable('billing_events', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const members = pgTable(
   'members',
@@ -155,5 +173,6 @@ export const invitations = pgTable(
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Organization = typeof organizations.$inferSelect;
+export type BillingEvent = typeof billingEvents.$inferSelect;
 export type Member = typeof members.$inferSelect;
 export type Invitation = typeof invitations.$inferSelect;

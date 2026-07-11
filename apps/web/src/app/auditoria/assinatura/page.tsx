@@ -10,15 +10,13 @@
  */
 
 import Link from 'next/link';
+import { BillingButton } from '@/components/billing/BillingButton';
 import { tokens as C } from '@/lib/tokens';
 
-const MAILTO = (tier: string) =>
-  `mailto:hrrsnp@gmail.com?subject=${encodeURIComponent(`Imovi Auditoria — ${tier}`)}`;
-
 const TIERS = [
-  { name: 'Essencial', price: 149, limite: 'Até 5 corretores', highlight: false },
-  { name: 'Profissional', price: 299, limite: 'Até 15 corretores', highlight: true },
-  { name: 'Escala', price: 499, limite: 'Corretores ilimitados', highlight: false },
+  { id: 'audit-essencial' as const, name: 'Essencial', price: 149, limite: 'Até 5 corretores', highlight: false },
+  { id: 'audit-profissional' as const, name: 'Profissional', price: 299, limite: 'Até 15 corretores', highlight: true },
+  { id: 'audit-escala' as const, name: 'Escala', price: 499, limite: 'Corretores ilimitados', highlight: false },
 ];
 
 const FEATURES = [
@@ -75,12 +73,11 @@ export default function AssinaturaPage() {
               <span style={{ fontSize: '0.8125rem', color: C.text2 }}>/mês</span>
             </div>
             <div style={{ fontSize: '0.6875rem', fontFamily: 'var(--font-mono)', color: C.accent, marginTop: '0.25rem', marginBottom: '0.875rem' }}>{t.limite}</div>
-            <a
-              href={MAILTO(t.name)}
-              style={{ display: 'block', padding: '0.625rem', background: t.highlight ? C.accent : C.accentDim, border: `1px solid ${t.highlight ? C.accent : C.accentMid}`, color: t.highlight ? '#000' : C.accent, textDecoration: 'none', textAlign: 'center', fontSize: '0.8125rem', fontWeight: 700, borderRadius: '8px' }}
-            >
-              Falar com vendas
-            </a>
+            <BillingButton
+              planId={t.id}
+              label={`Assinar ${t.name}`}
+              highlighted={t.highlight}
+            />
           </div>
         ))}
       </div>
@@ -101,6 +98,9 @@ export default function AssinaturaPage() {
       </div>
 
       <div style={{ textAlign: 'center' }}>
+        <div style={{ maxWidth: 260, margin: '0 auto 1rem' }}>
+          <BillingButton mode="portal" label="Gerenciar assinatura existente" />
+        </div>
         <Link href="/" style={{ fontSize: '0.8125rem', color: C.text2, textDecoration: 'none' }}>
           ← Voltar ao site
         </Link>

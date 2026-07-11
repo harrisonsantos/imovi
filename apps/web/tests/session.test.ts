@@ -10,6 +10,12 @@ describe('assertOrgAccess (gate de monetização)', () => {
     ).not.toThrow();
   });
 
+  it('mantém acesso em past_due para permitir recuperação de pagamento', () => {
+    expect(() =>
+      assertOrgAccess({ status: 'past_due', trialEndsAt: null }, NOW),
+    ).not.toThrow();
+  });
+
   it('permite trial dentro do prazo', () => {
     const trialEndsAt = new Date('2026-06-20T00:00:00Z');
     expect(() => assertOrgAccess({ status: 'trial', trialEndsAt }, NOW)).not.toThrow();
