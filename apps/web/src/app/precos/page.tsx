@@ -38,6 +38,30 @@ const PLANS = [
   },
 ];
 
+const AUDIT_SIGNUP = (planId: string) =>
+  `/auditoria/cadastro?plan=${encodeURIComponent(planId)}`;
+
+const AUDIT_PLANS = [
+  {
+    id: 'audit-essencial', name: 'Essencial', price: 149, highlight: false,
+    desc: 'Para imobiliárias pequenas que querem visibilidade total da operação.',
+    limite: 'Até 5 corretores',
+    features: ['Integração Vista CRM', '6 detectores de anomalia (incl. desvio vs AVM)', 'Relatório diário por e-mail', 'Dashboard de auditoria', 'Matrículas dos imóveis'],
+  },
+  {
+    id: 'audit-profissional', name: 'Profissional', price: 299, highlight: true,
+    desc: 'Para imobiliárias em crescimento com equipes de vendas maiores.',
+    limite: 'Até 15 corretores',
+    features: ['Integração Vista CRM', '6 detectores de anomalia (incl. desvio vs AVM)', 'Relatório diário por e-mail', 'Dashboard de auditoria', 'Matrículas dos imóveis'],
+  },
+  {
+    id: 'audit-escala', name: 'Escala', price: 499, highlight: false,
+    desc: 'Para grandes operações e redes com múltiplas equipes de corretores.',
+    limite: 'Corretores ilimitados',
+    features: ['Integração Vista CRM', '6 detectores de anomalia (incl. desvio vs AVM)', 'Relatório diário por e-mail', 'Dashboard de auditoria', 'Matrículas dos imóveis'],
+  },
+];
+
 const COMPARE_ROWS = [
   { feature: 'Estimativas',           free: 'Ilimitado', pro: 'Ilimitado', ent: 'Ilimitado' },
   { feature: 'Cidades',               free: '1 cidade',  pro: '5 cidades', ent: 'Todas'    },
@@ -104,6 +128,45 @@ export default function PrecosPage() {
                     ? <div key={i} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start' }}><span style={{ color: C.accent, flexShrink: 0, marginTop: '1px' }}>{CHECK}</span><span style={{ fontSize: '0.875rem', color: C.text2, lineHeight: 1.5 }}>{f}</span></div>
                     : <div key={i} style={{ height: '1px', background: C.border, margin: '4px 0' }} />
                   )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Auditoria para imobiliárias */}
+      <section style={{ padding: '0 clamp(1rem,4vw,2.5rem) clamp(3.5rem,7vh,5rem)' }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <p style={{ fontSize: '0.6875rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.14em', color: C.accent, marginBottom: '0.75rem' }}>Auditoria</p>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.5rem,3vw,2rem)', letterSpacing: '-0.03em', marginBottom: '0.75rem' }}>Auditoria para imobiliárias</h2>
+            <p style={{ fontSize: '0.9375rem', color: C.text2, lineHeight: 1.7, maxWidth: '560px', margin: '0 auto' }}>
+              Conecte seu Vista CRM e detecte anomalias na operação automaticamente — desvios de preço vs AVM, vendas não registradas e mais.
+            </p>
+          </div>
+          <div className="plans-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
+            {AUDIT_PLANS.map(p => (
+              <div key={p.id} style={{ background: C.surface, border: `1px solid ${p.highlight ? C.accentMid : C.border}`, borderRadius: '18px', padding: '1.75rem', position: 'relative', overflow: 'hidden', transition: 'border-color 0.2s', boxShadow: p.highlight ? `0 0 40px ${C.accentGlow}` : 'none' }}
+                onMouseEnter={e => { if (!p.highlight) (e.currentTarget as HTMLElement).style.borderColor = C.borderMid; }}
+                onMouseLeave={e => { if (!p.highlight) (e.currentTarget as HTMLElement).style.borderColor = C.border; }}>
+                {p.highlight && <div style={{ position: 'absolute', top: 0, right: 0, width: '250px', height: '250px', background: `radial-gradient(ellipse at top right,${C.accentGlow} 0%,transparent 70%)`, pointerEvents: 'none' }} />}
+                <div style={{ display: 'inline-flex', marginBottom: '1rem', padding: '3px 10px', borderRadius: '100px', background: p.highlight ? C.accentMid : C.blueDim, border: `1px solid ${p.highlight ? C.accentMid : 'rgba(79,142,247,0.25)'}`, color: p.highlight ? C.accent : C.blue, fontSize: '0.625rem', fontFamily: 'var(--font-mono)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>14 dias grátis</div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.125rem', marginBottom: '0.5rem' }}>{p.name}</h2>
+                <p style={{ fontSize: '0.8125rem', color: C.text2, lineHeight: 1.6, marginBottom: '1.5rem', minHeight: '48px' }}>{p.desc}</p>
+                <div style={{ marginBottom: '1.75rem' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '2.25rem', fontWeight: 500, letterSpacing: '-0.03em', color: C.text }}>R$&nbsp;{p.price}<span style={{ fontSize: '1rem', color: C.text2 }}>/mês</span></div>
+                  <div style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: C.accent, marginTop: '0.375rem' }}>{p.limite}</div>
+                </div>
+                <Link href={AUDIT_SIGNUP(p.id)} style={{ display: 'block', width: '100%', padding: '0.8125rem', background: p.highlight ? C.accent : C.accentDim, border: `1px solid ${p.highlight ? C.accent : C.accentMid}`, color: p.highlight ? '#000' : C.accent, textDecoration: 'none', textAlign: 'center', fontSize: '0.9375rem', fontWeight: 700, borderRadius: '9px', transition: 'all 0.15s', marginBottom: '1.75rem' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; if (!p.highlight) (e.currentTarget as HTMLElement).style.background = C.accentMid; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; if (!p.highlight) (e.currentTarget as HTMLElement).style.background = C.accentDim; }}>
+                  Começar 14 dias grátis
+                </Link>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {p.features.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start' }}><span style={{ color: C.accent, flexShrink: 0, marginTop: '1px' }}>{CHECK}</span><span style={{ fontSize: '0.875rem', color: C.text2, lineHeight: 1.5 }}>{f}</span></div>
+                  ))}
                 </div>
               </div>
             ))}

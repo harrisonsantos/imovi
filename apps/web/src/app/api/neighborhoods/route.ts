@@ -4,7 +4,7 @@
  * Lista bairros disponíveis ordenados por nome. Cacheado por 1h na CDN
  * — mediana de preço muda no máximo diariamente.
  */
-import { and, eq, asc } from 'drizzle-orm';
+import { and, eq, asc } from '@imovi/db/operators';
 import { neighborhoods } from '@imovi/db/schema';
 import { cityRepo } from '@imovi/db/cities';
 import { getDb } from '@/lib/db';

@@ -23,7 +23,6 @@
       ]
     },
     "outDir": "dist",
-    "rootDir": ".",
     "noEmit": true
   },
   "include": [

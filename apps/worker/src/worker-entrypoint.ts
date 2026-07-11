@@ -8,17 +8,23 @@
  * Crons configurados no wrangler.toml:
  *   "0 6 * * *"   — scrape diário 03:00 BRT
  *   "0 7 * * 1"   — enrich-iptu semanal segunda 04:00 BRT
+ *   "0 8 * * *"   — auditoria diária + e-mail 05:00 BRT
  */
 
 import { consoleLogger } from './logger.js';
 import { runScrapeCommand } from './commands/scrape.js';
 import { runEnrichIptuCommand } from './commands/enrich-iptu.js';
+import { runDailyAuditCommand, DEFAULT_EMAIL_FROM } from './commands/daily-audit.js';
 
 export interface Env {
   DATABASE_URL: string;
   IPTU_CACHE: KVNamespace;
   HTML_SNAPSHOTS: R2Bucket;
   LOG_LEVEL?: string;
+  /** Secret opcional — sem ela a auditoria roda sem enviar e-mails. */
+  RESEND_API_KEY?: string;
+  /** Remetente opcional — default 'Imovi <auditoria@imovi.app.br>'. */
+  EMAIL_FROM?: string;
 }
 
 export default {
@@ -26,6 +32,7 @@ export default {
    * Scheduled handler — invocado pelos cron triggers do wrangler.toml
    * cron "0 6 * * *"  → scrape diário
    * cron "0 7 * * 1"  → enrich-iptu semanal
+   * cron "0 8 * * *"  → auditoria diária + e-mail
    */
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const logger = consoleLogger;
@@ -54,6 +61,19 @@ export default {
           logger,
         }).then(() => logger.info('worker_enrich_done', { cron: controller.cron }))
           .catch((err: unknown) => logger.error('worker_enrich_error', {
+            error: err instanceof Error ? err.message : String(err),
+          }))
+      );
+    } else if (controller.cron === '0 8 * * *') {
+      // Auditoria diária: detectores + relatório por e-mail
+      ctx.waitUntil(
+        runDailyAuditCommand({
+          databaseUrl,
+          resendApiKey: env.RESEND_API_KEY,
+          emailFrom: env.EMAIL_FROM ?? DEFAULT_EMAIL_FROM,
+          logger,
+        }).then((summary) => logger.info('worker_daily_audit_done', { cron: controller.cron, ...summary }))
+          .catch((err: unknown) => logger.error('worker_daily_audit_error', {
             error: err instanceof Error ? err.message : String(err),
           }))
       );

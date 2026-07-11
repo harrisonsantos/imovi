@@ -15,11 +15,34 @@ const nextConfig = {
   // Trailing slash melhora o cache hit rate no CF
   trailingSlash: true,
 
+  // Impede indexação de APIs, áreas autenticadas e telas demonstrativas.
+  // X-Robots-Tag protege inclusive respostas que não renderizam <head>.
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
+      },
+      {
+        source: '/auditoria/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
+      },
+      {
+        source: '/dashboard/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
+      },
+      {
+        source: '/resultados/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
+      },
+    ];
+  },
+
   // Pacotes do monorepo em TS bruto (main aponta pra src/*.ts) — Next precisa
   // transpilá-los. Sem isso, webpack falha a resolver os imports `.js` internos
   // dos barrels (ex.: `@imovi/db` → `./repositories/scrape-errors.js` não existe,
   // só `.ts`).
-  transpilePackages: ['@imovi/db', '@imovi/ml-infer', '@imovi/shared'],
+  transpilePackages: ['@imovi/db', '@imovi/ml-infer', '@imovi/shared', '@imovi/audit'],
 
   webpack: (config) => {
     config.resolve.extensionAlias = {
@@ -47,4 +70,3 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 export default nextConfig;
-

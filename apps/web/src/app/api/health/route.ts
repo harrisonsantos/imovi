@@ -5,7 +5,7 @@
  * páginas estáticas). Se quisermos que CF marque o deploy como unhealthy,
  * mudar para 503 quando db='fail'.
  */
-import { sql } from 'drizzle-orm';
+import { sql } from '@imovi/db/operators';
 import { getDb } from '@/lib/db';
 
 export const runtime = 'edge';

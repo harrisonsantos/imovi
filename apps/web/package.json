@@ -9,18 +9,21 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "pages:deploy": "wrangler pages deploy .vercel/output/static --project-name=imovi-web --account-id=f4000b2968b2834704aef648152c7dd4"
+    "pages:deploy": "wrangler pages deploy .vercel/output/static --project-name=imovi-web --account-id=f4000b2968b2834704aef648152c7dd4",
+    "test": "vitest run"
   },
   "dependencies": {
     "@imovi/db": "workspace:*",
     "@imovi/ml-infer": "workspace:*",
     "@imovi/shared": "workspace:*",
+    "better-auth": "^1.6.16",
     "drizzle-orm": "^0.36.4",
     "next": "^15.2.0",
     "onnxruntime-web": "^1.20.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@imovi/audit": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.8",
@@ -28,9 +31,10 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "eslint": "^9.17.0",
     "typescript": "^5.7.0",
     "vercel": "^44.0.0",
     "wrangler": "^3.106.0",
-    "eslint": "^9.17.0"
+    "vitest": "^2.1.8"
   }
 }

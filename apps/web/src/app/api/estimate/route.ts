@@ -8,7 +8,7 @@
  * Cobertura: cidades ativas na tabela `cities`. Demais retornam 422.
  */
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { and, eq } from '@imovi/db/operators';
 import { neighborhoods } from '@imovi/db/schema';
 import { estimateRepo } from '@imovi/db/estimates';
 import { cityRepo } from '@imovi/db/cities';

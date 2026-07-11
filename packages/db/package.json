@@ -10,7 +10,13 @@
     "./schema": "./src/schema.ts",
     "./client": "./src/client.ts",
     "./estimates": "./src/repositories/estimates.ts",
-    "./cities": "./src/repositories/cities.ts"
+    "./cities": "./src/repositories/cities.ts",
+    "./schema-auth": "./src/schema-auth.ts",
+    "./audit": "./src/repositories/audit/index.ts",
+    "./schema-audit": "./src/schema-audit.ts",
+    "./orgs": "./src/repositories/orgs.ts",
+    "./billing": "./src/repositories/billing.ts",
+    "./operators": "./src/operators.ts"
   },
   "scripts": {
     "build": "tsc --build",
