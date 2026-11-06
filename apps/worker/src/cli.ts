@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import type { ListingSource } from '@imovi/shared';
 import { consoleLogger, type Logger } from './logger.js';
+import { createIptuAdapters } from './commands/iptu-config.js';
+import type { EnrichIptuCommandOpts } from './commands/enrich-iptu.js';
 
 /**
  * Resultado do parser de argumentos. Discriminated union por `command`
@@ -97,7 +99,8 @@ export interface CliDeps {
     databaseUrl: string;
     logger: Logger;
   }) => Promise<void>;
-  runEnrichIptu: (opts: { limit?: number; databaseUrl: string; logger: Logger }) => Promise<void>;
+  runEnrichIptu: (opts: EnrichIptuCommandOpts) => Promise<void>;
+  iptuFetch?: typeof fetch;
   runBackfillNeighborhoods?: (opts: { databaseUrl: string; logger: Logger }) => Promise<unknown>;
   runAggregateNeighborhoods?: (opts: { databaseUrl: string; logger: Logger }) => Promise<unknown>;
 }
@@ -117,6 +120,8 @@ Flags:
 
 Env:
   DATABASE_URL   Obrigatório para scrape e enrich-iptu
+  INFOSIMPLES_TOKEN   Obrigatório para enrich-iptu
+  INFOSIMPLES_CURITIBA_ENDPOINT   Endpoint confirmado pelo fornecedor para Curitiba
 `;
 
 /** Executa o CLI com deps injetadas. Retorna o exit code que foi sinalizado. */
@@ -165,6 +170,7 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
       await deps.runBackfillNeighborhoods({ databaseUrl, logger: deps.logger });
     } else {
       await deps.runEnrichIptu({
+        ...createIptuAdapters(deps.env, deps.logger, deps.iptuFetch),
         ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
         databaseUrl,
         logger: deps.logger,

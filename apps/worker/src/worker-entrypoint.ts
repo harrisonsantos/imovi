@@ -16,11 +16,15 @@ import { createDbClient } from '@imovi/db';
 import { sql } from '@imovi/db/operators';
 import { runScrapeCommand } from './commands/scrape.js';
 import { runEnrichIptuCommand } from './commands/enrich-iptu.js';
+import { createIptuAdapters } from './commands/iptu-config.js';
+import { KvIptuCache } from '@imovi/enrichment';
 import { runDailyAuditCommand, DEFAULT_EMAIL_FROM } from './commands/daily-audit.js';
 
 export interface Env {
   DATABASE_URL: string;
   IPTU_CACHE: KVNamespace;
+  INFOSIMPLES_TOKEN?: string;
+  INFOSIMPLES_CURITIBA_ENDPOINT?: string;
   HTML_SNAPSHOTS: R2Bucket;
   LOG_LEVEL?: string;
   /** Secret opcional — sem ela a auditoria roda sem enviar e-mails. */
@@ -65,13 +69,16 @@ export default {
         runEnrichIptuCommand({
           databaseUrl,
           logger,
+          ...createIptuAdapters(env, logger),
+          cache: new KvIptuCache(env.IPTU_CACHE),
         })
           .then(() => logger.info('worker_enrich_done', { cron: controller.cron }))
-          .catch((err: unknown) =>
+          .catch((err: unknown) => {
             logger.error('worker_enrich_error', {
               error: err instanceof Error ? err.message : String(err),
-            }),
-          ),
+            });
+            throw err;
+          }),
       );
     } else if (controller.cron === '0 8 * * *') {
       // Auditoria diária: detectores + relatório por e-mail

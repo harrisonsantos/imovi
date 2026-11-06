@@ -54,4 +54,9 @@ Logs locais em `.codex/`: `test-final.log`, `public-db-test.log`, `migration-tes
 | Preview e rollback externos           | NOT RUN | Provisionar bindings isolados, aplicar migrations e executar workflow/smoke/jornadas.    |
 | Produção/cobrança real                | NOT RUN | Aprovação explícita após todos os gates externos.                                        |
 
-Um checkout sem session ID após timeout permanece preservado e bloqueia nova tentativa até reconciliação; não supõe que Stripe deixou de criar a cobrança. A CLI IPTU ainda não injeta InfoSimples e não possui adapter Curitiba; configuração isolada não ativa cobertura inexistente.
+Um checkout sem session ID após timeout permanece preservado e bloqueia nova tentativa até reconciliação; não supõe que Stripe deixou de criar a cobrança.
+
+Atualização T4 (05/11/2026): a CLI e o cron IPTU agora injetam InfoSimples e há um
+adapter Curitiba com contrato sintético, normalização e projeção fiscal sem
+nome/CPF. Configuração isolada não comprova cobertura real: credencial e contrato
+do fornecedor continuam **BLOCKED**. Ver [contrato e evidências T4](../iptu-curitiba.md).
