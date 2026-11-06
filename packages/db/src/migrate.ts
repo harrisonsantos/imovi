@@ -10,7 +10,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@neondatabase/serverless';
-import { createHash } from 'node:crypto';
+import { checksumMatches, migrationChecksum } from './migration-checksum.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
@@ -37,13 +37,13 @@ async function main(): Promise<void> {
     )`);
     for (const file of files) {
       const content = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
-      const checksum = createHash('sha256').update(content).digest('hex');
+      const checksum = migrationChecksum(content);
       const previous = await client.query(
         'SELECT checksum FROM schema_migrations WHERE name = $1',
         [file],
       );
       if (previous.rows.length > 0) {
-        if (previous.rows[0].checksum !== checksum)
+        if (!checksumMatches(previous.rows[0].checksum, content))
           throw new Error(`Migration checksum mismatch: ${file}`);
         console.log(`[db:migrate] já aplicada ${file}`);
         continue;
