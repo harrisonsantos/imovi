@@ -4,14 +4,14 @@ Data: 05/11/2026. Fonte única de verdade do projeto, consolidando o trabalho fe
 com Claude Code e Codex. Substitui a leitura avulsa dos documentos abaixo, que
 continuam válidos como detalhe:
 
-| Documento | Origem | Papel |
-| --- | --- | --- |
-| [stabilization/spec.md](stabilization/spec.md) | Codex | Critérios AC-001..AC-012 e regras de rollout |
-| [stabilization/evidence.md](stabilization/evidence.md) | Codex | Evidência local e gates externos |
-| [../monetization-readiness.md](../monetization-readiness.md) | Codex | Planos, cobrança, anúncios, P0 comerciais |
-| [../seo-agressivo.md](../seo-agressivo.md) | Codex | SEO programático e clusters |
-| [../deploy-runbook.md](../deploy-runbook.md) | Claude + Codex | Deploy, variáveis, rollback |
-| Memória Claude (projeto/auditoria) | Claude | Decisões de ML, multi-cidade, auditoria |
+| Documento                                                    | Origem         | Papel                                        |
+| ------------------------------------------------------------ | -------------- | -------------------------------------------- |
+| [stabilization/spec.md](stabilization/spec.md)               | Codex          | Critérios AC-001..AC-012 e regras de rollout |
+| [stabilization/evidence.md](stabilization/evidence.md)       | Codex          | Evidência local e gates externos             |
+| [../monetization-readiness.md](../monetization-readiness.md) | Codex          | Planos, cobrança, anúncios, P0 comerciais    |
+| [../seo-agressivo.md](../seo-agressivo.md)                   | Codex          | SEO programático e clusters                  |
+| [../deploy-runbook.md](../deploy-runbook.md)                 | Claude + Codex | Deploy, variáveis, rollback                  |
+| Memória Claude (projeto/auditoria)                           | Claude         | Decisões de ML, multi-cidade, auditoria      |
 
 ## 1. Estado consolidado
 
@@ -50,30 +50,37 @@ Critério de alocação:
 - **Usuário:** tudo que exige credencial, conta externa, aprovação de produção ou
   decisão jurídica.
 
-| ID | Tarefa | Executor | Workspace | Depende de |
-| --- | --- | --- | --- | --- |
-| T1 | Integrar estabilização, plano unificado e PR para `main` | Claude (coordenador) | este | — |
-| T2 | Trocar `@cloudflare/next-on-pages` por `@opennextjs/cloudflare` (Workers), remover `patches/`, resolver o KV do Pages e o `first-deploy.ps1` | Codex | novo `opennext` | T1 |
-| T3 | Fechar os P0 de confiança: `/precos` só vende o que existe, `/dashboard` rotulado como demo ou sem link, sem "ilimitado", aceite de termos com versão/data persistido (migration 0008) | Claude | novo `produto-p0` | T1 |
-| T4 | IPTU: injetar InfoSimples na CLI e criar o adapter Curitiba com TDD e fixtures, sem rede real e sem dependência nova | Codex | novo `iptu-curitiba` | T1 |
-| T5 | Atualizar tooling com avisos moderados (Vitest/esbuild) | Codex | depois de T2 | T2 |
-| T6 | Retreinar e promover o v2 com corpus real e split temporal | Claude | — | G1, G4 |
-| T7 | Corretor Pro (R$ 39–59) e API: spec e entitlements | Claude (spec) + Codex (impl.) | — | T3 e G3 |
+| ID  | Tarefa                                                                                                                                                                                 | Executor                      | Workspace            | Depende de |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------- | ---------- |
+| T1  | Integrar estabilização, plano unificado e PR para `main`                                                                                                                               | Claude (coordenador)          | este                 | —          |
+| T2  | Trocar `@cloudflare/next-on-pages` por `@opennextjs/cloudflare` (Workers), remover `patches/`, resolver o KV do Pages e o `first-deploy.ps1`                                           | Codex                         | novo `opennext`      | T1         |
+| T3  | Fechar os P0 de confiança: `/precos` só vende o que existe, `/dashboard` rotulado como demo ou sem link, sem "ilimitado", aceite de termos com versão/data persistido (migration 0008) | Claude                        | novo `produto-p0`    | T1         |
+| T4  | IPTU: injetar InfoSimples na CLI e criar o adapter Curitiba com TDD e fixtures, sem rede real e sem dependência nova                                                                   | Codex                         | novo `iptu-curitiba` | T1         |
+| T5  | Atualizar tooling com avisos moderados (Vitest/esbuild)                                                                                                                                | Codex                         | depois de T2         | T2         |
+| T6  | Retreinar e promover o v2 com corpus real e split temporal                                                                                                                             | Claude                        | —                    | G1, G4     |
+| T7  | Corretor Pro (R$ 39–59) e API: spec e entitlements                                                                                                                                     | Claude (spec) + Codex (impl.) | —                    | T3 e G3    |
+
+**Status em 05/11/2026 (noite):**
+
+- T3: concluída na branch `harrisonsantos/produto-p0` (`a01672a`, `886ce8b`, `b6a6dc6`): P0 de confiança, aceite de termos (`0008`, `ON DELETE RESTRICT`) e Política de privacidade citando o aceite.
+- T2 e T4: os workers Codex caíram sem reportar, com a cota de sessão do Codex em 85%. Os dois deixaram commit (`06667e5` em `opennext`, `6d34ecb` em `iptu-curitiba`). A verificação desses commits foi redespachada para Gemini (Antigravity) como T2v e T4v.
+- T7: a spec está em [corretor-pro.md](corretor-pro.md) e aguarda as decisões D1 a D4.
+- Banco de produção (Neon `imovi-prod`): só `0001` e `0002` estão aplicadas, sem `schema_migrations`, e o último scrape é de 11/06/2026. O G1 (staging) é pré-requisito de qualquer deploy.
 
 T2, T3 e T4 não compartilham arquivos de produto. O lockfile só pode mudar em T2.
 T3 é dona da migration `0008`.
 
 ## 3. Gates externos (usuário)
 
-| Gate | O que fazer | Desbloqueia |
-| --- | --- | --- |
-| G1 | Neon staging: snapshot/backup e `DATABASE_URL` de staging; aplicar `0002`..`0007` em staging | Readiness, T6, deploy |
-| G2 | Secrets: `BETTER_AUTH_SECRET`, `VISTA_KEY_SECRET`, `RESEND_API_KEY` (rotacionar), Turnstile site/secret | AC-002/003 em staging |
-| G3 | Stripe sandbox: produtos/prices `STRIPE_PRICE_*`, webhook, portal; depois o ciclo do runbook | AC-006, cobrança |
-| G4 | Aprovar o upload do modelo v2 ao R2 e a ativação | T6 |
-| G5 | R2 `imovi-matriculas`; reapontar o webhook Vista; apagar Vercel `imobcheck-sepia` e Supabase legado | Auditoria em produção |
-| G6 | Revisão jurídica de termos/privacidade e definição fiscal | Venda comercial |
-| G7 | Aprovação explícita de produção, depois de G1–G3 e do preview verde no mesmo SHA | Go-live |
+| Gate | O que fazer                                                                                             | Desbloqueia           |
+| ---- | ------------------------------------------------------------------------------------------------------- | --------------------- |
+| G1   | Neon staging: snapshot/backup e `DATABASE_URL` de staging; aplicar `0002`..`0007` em staging            | Readiness, T6, deploy |
+| G2   | Secrets: `BETTER_AUTH_SECRET`, `VISTA_KEY_SECRET`, `RESEND_API_KEY` (rotacionar), Turnstile site/secret | AC-002/003 em staging |
+| G3   | Stripe sandbox: produtos/prices `STRIPE_PRICE_*`, webhook, portal; depois o ciclo do runbook            | AC-006, cobrança      |
+| G4   | Aprovar o upload do modelo v2 ao R2 e a ativação                                                        | T6                    |
+| G5   | R2 `imovi-matriculas`; reapontar o webhook Vista; apagar Vercel `imobcheck-sepia` e Supabase legado     | Auditoria em produção |
+| G6   | Revisão jurídica de termos/privacidade e definição fiscal                                               | Venda comercial       |
+| G7   | Aprovação explícita de produção, depois de G1–G3 e do preview verde no mesmo SHA                        | Go-live               |
 
 ## 4. Regras comuns a todas as tarefas
 
