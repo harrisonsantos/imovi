@@ -9,7 +9,6 @@ import { AdSlot } from '@/components/ads/AdSlot';
 import { JsonLd } from '@/components/JsonLd';
 import { SITE_NAME, SITE_URL } from '@/lib/seo';
 
-export const runtime = 'edge';
 
 export const metadata: Metadata = {
   title: { absolute: 'Quanto vale meu imóvel? Avaliação gratuita | imovi' },

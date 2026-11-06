@@ -4,7 +4,6 @@ import { appUrlFromRequest, hasTrustedOrigin } from '@/lib/billing';
 import { requireOrgAdminIdentity, sessionGuard } from '@/lib/session';
 import { createPortalSession } from '@/lib/stripe-edge';
 
-export const runtime = 'edge';
 
 export async function POST(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();

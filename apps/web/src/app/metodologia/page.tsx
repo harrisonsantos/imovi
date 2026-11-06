@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { Nav } from '@/components/Nav';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 
 export default function MetodologiaPage() {
   return (

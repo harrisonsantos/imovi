@@ -2,7 +2,7 @@
  * Instância better-auth (email/senha + organizations), edge-compatible.
  *
  * Construída de forma lazy por request porque DATABASE_URL e BETTER_AUTH_SECRET
- * vêm do env do Cloudflare Pages (getRequestContext().env), não de process.env.
+ * vêm do env do Worker OpenNext (getCloudflareContext().env), não de process.env.
  * O drizzleAdapter aponta para as tabelas de @imovi/db/schema-auth — mesma
  * convenção snake_case do resto do banco.
  */

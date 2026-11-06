@@ -1,13 +1,14 @@
 # Imovi
 
-Monorepo do estimador imobiliário e da Auditoria de carteira. Web em Next.js/Cloudflare Pages, jobs em Cloudflare Workers e dados em Neon Postgres. O estimador público entrega uma **heurística identificada**; ONNX permanece desativado até validação independente de inferência e qualidade temporal.
+Monorepo do estimador imobiliário e da Auditoria de carteira. Web em Next.js/Cloudflare Workers via OpenNext, jobs em outro Cloudflare Worker e dados em Neon Postgres. O estimador público entrega uma **heurística identificada**; ONNX permanece desativado até validação independente de inferência e qualidade temporal.
 
 Referências iniciais dos seeds não são preços de transações. Medianas observadas usam anúncios válidos de venda, observações de até 90 dias e pelo menos vinte imóveis distintos. O relatório recupera o cálculo persistido, com parâmetros e origem/data; não gera comparáveis ou histórico inexistentes.
 
 ## Trabalho local
 
 Requer Node 22, pnpm 9.15.9 e uv/Python 3.13. No PowerShell, use `pnpm.cmd` se a política bloquear scripts.
-O build de Pages no Windows também requer Git for Windows (Git Bash); o wrapper o seleciona automaticamente. Não é necessário alterar permissões do sistema.
+O build Cloudflare usa `@opennextjs/cloudflare`; não depende do builder Vercel nem dos patches do antigo adaptador Pages.
+`apps/web/scripts/build-cf.mjs` executa `opennextjs-cloudflare build` e aplica no Windows (quando não há permissão de symlink) fallback para junctions relativas no standalone/OpenNext, permitindo rodar `build:cf` e `wrangler deploy --dry-run` tanto em Windows quanto em Linux (ver [evidência do web](apps/web/README.md#evidência-local-t2)).
 
 ```sh
 pnpm install --frozen-lockfile
@@ -36,11 +37,15 @@ Copie `.env.example` para `apps/web/.env.local` para a web; configure variáveis
 ```sh
 pnpm turbo run build --filter="@imovi/web^..." --filter="@imovi/worker..."
 pnpm --filter @imovi/web build:cf
+pnpm --filter @imovi/web exec wrangler deploy --dry-run
+pnpm --filter @imovi/web exec wrangler deploy --dry-run --env=preview
 pnpm --filter @imovi/worker exec wrangler deploy --dry-run
 pnpm audit --prod --audit-level=high
 ```
 
-Pages utiliza o adaptador legado `next-on-pages`. Sua substituição requer spec própria, preview e rollback; esta estabilização mantém Cloudflare.
+`build:cf` executa `opennextjs-cloudflare build`, gerando `.open-next/worker.js` e `.open-next/assets`. Os dry-runs verificam o empacotamento sem publicação; não comprovam a existência dos bindings remotos. A web usa `imovi-web` em produção e `imovi-web-preview` com `--env=preview`. Publicação autorizada usa `opennextjs-cloudflare deploy`, selecionando o mesmo ambiente no build e no deploy. Os bindings secretos precisam ser configurados no Worker correspondente; não são herdados do Pages.
+
+`IPTU_CACHE` pertence ao Worker de jobs: a web não tem consumidor desse KV. O script legado `first-deploy.ps1` da branch `claude/distracted-mcclintock` foi descartado; a justificativa e o procedimento de migração/rollback estão no [runbook](docs/deploy-runbook.md#transição-de-pages-para-opennext).
 
 ## Próxima liberação
 

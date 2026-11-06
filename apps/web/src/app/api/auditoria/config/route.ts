@@ -16,7 +16,6 @@ import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 import { requireOrgAdmin, sessionGuard } from '@/lib/session';
 
-export const runtime = 'edge';
 
 const ConfigPutSchema = z.object({
   vistaApiUrl: z.string().url().optional(),

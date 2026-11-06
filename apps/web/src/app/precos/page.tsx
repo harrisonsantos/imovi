@@ -7,7 +7,6 @@ import { Footer } from '@/components/Footer';
 import { BILLING_PLANS } from '@/lib/billing';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 
 /** Preço e limite vêm de BILLING_PLANS, a mesma fonte do checkout e do webhook. */
 function corretoresLabel(max: number | null, previous: number | null): string {

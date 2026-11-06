@@ -16,7 +16,6 @@ import {
 } from '@/lib/estimate-protection';
 import { publicEstimateOf } from '@/lib/public-estimate';
 
-export const runtime = 'edge';
 
 const RequestSchema = z.object({
   city: z.string().trim().min(1).max(120),

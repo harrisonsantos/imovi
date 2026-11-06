@@ -30,11 +30,16 @@ jobs:
       - run: pnpm test
       - run: pnpm audit --prod --audit-level=high
       - run: pnpm turbo run build --filter=@imovi/web^... --filter=@imovi/worker...
-      - name: Build Pages
+      - name: Build web Worker (OpenNext)
         working-directory: apps/web
         env:
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: '0x4AAAAAAC-vdQ1-_9T1AmV_'
         run: pnpm build:cf
+      - name: Validate web Worker bundles
+        working-directory: apps/web
+        run: |
+          pnpm exec wrangler deploy --dry-run
+          pnpm exec wrangler deploy --dry-run --env=preview
       - name: Validate Worker bundle
         working-directory: apps/worker
         run: pnpm exec wrangler deploy --dry-run

@@ -11,7 +11,6 @@ import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 import { requireOrg, sessionGuard } from '@/lib/session';
 
-export const runtime = 'edge';
 
 const ResolvePatchSchema = z.object({ id: z.string().uuid() });
 

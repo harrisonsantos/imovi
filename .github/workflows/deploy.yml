@@ -67,20 +67,29 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo run build --filter=@imovi/web^... --filter=@imovi/worker...
-      - run: pnpm --filter @imovi/web build:cf
+      - name: Build web Worker (OpenNext)
         env:
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: '0x4AAAAAAC-vdQ1-_9T1AmV_'
           NEXT_PUBLIC_APP_ENV: ${{ inputs.target }}
-      - name: Publish Pages
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [ "$TARGET" = production ]; then
+            pnpm --filter @imovi/web build:cf
+          else
+            pnpm --filter @imovi/web build:cf --env=preview
+          fi
+      - name: Publish web Worker (OpenNext)
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TARGET: ${{ inputs.target }}
         run: |
-          BRANCH=preview
-          if [ "$TARGET" = production ]; then BRANCH=main; fi
-          pnpm exec wrangler pages deploy .vercel/output/static --project-name=imovi-web --branch="$BRANCH" --commit-hash="${{ inputs.sha }}"
+          if [ "$TARGET" = production ]; then
+            pnpm exec opennextjs-cloudflare deploy
+          else
+            pnpm exec opennextjs-cloudflare deploy --env=preview
+          fi
       - name: Publish Worker
         working-directory: apps/worker
         env:
