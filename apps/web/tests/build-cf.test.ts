@@ -8,19 +8,16 @@ import {
 
 describe('OpenNext Windows build compatibility', () => {
   it('converts absolute Windows junction targets to relative symlink targets', () => {
-    const linkPath = path.join('C:', 'repo', 'apps', 'web', 'node_modules', 'next');
-    const junctionTarget =
-      '\\\\?\\' +
-      path.join('C:', 'repo', 'node_modules', '.pnpm', 'next@15.5.29', 'node_modules', 'next') +
-      path.sep;
+    // Caminhos absolutos da plataforma atual: o teste roda no Windows e no CI Linux.
+    const repo = path.resolve('repo');
+    const linkPath = path.join(repo, 'apps', 'web', 'node_modules', 'next');
+    const target = path.join(repo, 'node_modules', '.pnpm', 'next@15.5.29', 'node_modules', 'next');
+    // No Windows, readlink de junction devolve o prefixo \\?\ e barra final.
+    const junctionTarget = (process.platform === 'win32' ? '\\\\?\\' : '') + target + path.sep;
 
     const rel = toRelativeLinkTarget(linkPath, junctionTarget);
     expect(path.isAbsolute(rel)).toBe(false);
-    expect(path.resolve(path.dirname(linkPath), rel)).toBe(
-      path.resolve(
-        path.join('C:', 'repo', 'node_modules', '.pnpm', 'next@15.5.29', 'node_modules', 'next'),
-      ),
-    );
+    expect(path.resolve(path.dirname(linkPath), rel)).toBe(target);
     expect(toRelativeLinkTarget(linkPath, '../.pnpm/react')).toBe('../.pnpm/react');
   });
 
@@ -85,11 +82,19 @@ describe('OpenNext Windows build compatibility', () => {
 
   it('injects NODE_OPTIONS preload only on win32 without duplicating flags', () => {
     const scriptUrl = 'file:///C:/repo/apps/web/scripts/build-cf.mjs';
-    const linuxEnv = withWindowsPreloadEnv({ NODE_OPTIONS: '--max-old-space-size=4096' }, scriptUrl, 'linux');
+    const linuxEnv = withWindowsPreloadEnv(
+      { NODE_OPTIONS: '--max-old-space-size=4096' },
+      scriptUrl,
+      'linux',
+    );
     expect(linuxEnv.NODE_OPTIONS).toBe('--max-old-space-size=4096');
     expect(linuxEnv.IMOVI_WIN_SYMLINK_SHIM).toBeUndefined();
 
-    const winEnv = withWindowsPreloadEnv({ NODE_OPTIONS: '--max-old-space-size=4096' }, scriptUrl, 'win32');
+    const winEnv = withWindowsPreloadEnv(
+      { NODE_OPTIONS: '--max-old-space-size=4096' },
+      scriptUrl,
+      'win32',
+    );
     expect(winEnv.IMOVI_WIN_SYMLINK_SHIM).toBe('1');
     expect(winEnv.NODE_OPTIONS).toContain('--max-old-space-size=4096');
     expect(winEnv.NODE_OPTIONS).toContain(`--import=${scriptUrl}`);
