@@ -11,7 +11,7 @@ interface HoodData {
   change: number;
 }
 
-// ── Static hood data (replace with real /api/neighborhoods data) ───────────
+// ── Valores fictícios da ilustração (rotulada como demonstração) ──────────
 const HOODS: HoodData[] = [
   { name: 'Batel', price: 12400, change: 2.1 },
   { name: 'Bigorrilho', price: 9800, change: 1.8 },
@@ -165,7 +165,7 @@ function HeroChart() {
           position: 'relative',
         }}
       >
-        Zap · OLX · VivaReal — dados agregados
+        Ilustração — não representa preços reais
       </p>
     </div>
   );
@@ -242,7 +242,7 @@ export function Hero() {
                 fontFamily: 'var(--font-mono)',
               }}
             >
-              Avaliação automática de imóveis · gratuito
+              Estimativa automática de valor · gratuita
             </span>
           </div>
 

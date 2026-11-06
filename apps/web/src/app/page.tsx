@@ -50,14 +50,14 @@ export default function HomePage() {
             {
               '@type': 'WebApplication',
               '@id': `${SITE_URL}/#app`,
-              name: 'Avaliador de imóveis imovi',
+              name: 'Estimador de valor de imóveis imovi',
               url: SITE_URL,
               applicationCategory: 'FinanceApplication',
               operatingSystem: 'Web',
               inLanguage: 'pt-BR',
               offers: { '@type': 'Offer', price: '0', priceCurrency: 'BRL' },
               description:
-                'Estimativa automatizada e gratuita do valor de mercado de imóveis no Brasil.',
+                'Estimativa heurística e gratuita de referência de valor de imóveis nas cidades disponíveis.',
             },
           ],
         }}

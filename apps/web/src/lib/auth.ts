@@ -8,6 +8,7 @@
  */
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { createAuthMiddleware } from 'better-auth/api';
 import { organization } from 'better-auth/plugins';
 import {
   users,
@@ -20,6 +21,11 @@ import {
 } from '@imovi/db/schema-auth';
 import { isProductionEnv } from './cf-env.js';
 import { getDb } from './db.js';
+import {
+  assertSignupTermsAccepted,
+  recordSignupAcceptance,
+  requireCurrentTermsAcceptance,
+} from './terms.js';
 
 export interface AuthEnv {
   DATABASE_URL?: string;
@@ -90,6 +96,24 @@ function buildAuth(env: AuthEnv) {
       requireEmailVerification: production,
       autoSignIn: !production,
     },
+    // Cadastro só com aceite da versão vigente dos Termos e da Privacidade.
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/sign-up/email') assertSignupTermsAccepted(ctx.body);
+      }),
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          after: async (user, ctx) => {
+            // O hook acima já validou o aceite deste cadastro. Falha aqui não
+            // desfaz a conta: a criação da imobiliária volta a exigir o aceite.
+            if (ctx?.path !== '/sign-up/email') return;
+            await recordSignupAcceptance(db, user.id).catch(() => undefined);
+          },
+        },
+      },
+    },
     emailVerification: {
       sendOnSignUp: production,
       sendOnSignIn: production,
@@ -116,6 +140,7 @@ function buildAuth(env: AuthEnv) {
         organizationHooks: {
           beforeCreateOrganization: async ({ user }) => {
             if (production && !user.emailVerified) throw new Error('Confirme seu e-mail primeiro.');
+            await requireCurrentTermsAcceptance(db, user.id);
           },
           afterCreateOrganization: async ({
             organization: org,

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { ConsentResetButton } from '@/components/ads/ConsentResetButton';
 import { Footer } from '@/components/Footer';
 import { Nav } from '@/components/Nav';
+import { formatVersionDate, PRIVACY_VERSION } from '@/lib/terms-version';
 import { tokens as C } from '@/lib/tokens';
 
 export const runtime = 'edge';
@@ -23,7 +24,7 @@ export default function PrivacidadePage() {
         </h1>
         <p style={{ color: C.text2, lineHeight: 1.75, marginBottom: '2rem' }}>
           Esta página descreve, em linguagem direta, como o imovi trata dados no site público e no
-          produto de auditoria. Última atualização: 30 de setembro de 2026.
+          produto de auditoria. Última atualização: {formatVersionDate(PRIVACY_VERSION)}.
         </p>
         {[
           [

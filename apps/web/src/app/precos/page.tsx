@@ -4,14 +4,40 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
+import { BILLING_PLANS } from '@/lib/billing';
 import { tokens as C } from '@/lib/tokens';
 
 export const runtime = 'edge';
 
-const AUDIT_PLANS = [
-  { id: 'audit-essencial', name: 'Essencial', price: 149, limit: 'Até 5 corretores' },
-  { id: 'audit-profissional', name: 'Profissional', price: 299, limit: 'Até 15 corretores' },
-  { id: 'audit-escala', name: 'Escala', price: 499, limit: 'Corretores ilimitados' },
+/** Preço e limite vêm de BILLING_PLANS, a mesma fonte do checkout e do webhook. */
+function corretoresLabel(max: number | null, previous: number | null): string {
+  if (max !== null) return `Até ${max} corretores`;
+  return previous !== null
+    ? `Acima de ${previous} corretores`
+    : 'Sem limite de corretores no plano';
+}
+const AUDIT_PLANS = BILLING_PLANS.map((plan, i) => ({
+  id: plan.id,
+  name: plan.name,
+  price: plan.priceMonthly,
+  limit: corretoresLabel(plan.maxCorretores, BILLING_PLANS[i - 1]?.maxCorretores ?? null),
+}));
+
+/** Entregue hoje em todos os planos da Auditoria. */
+const AUDIT_FEATURES = [
+  'Importação de imóveis, negócios, leads e corretores do Vista CRM',
+  'Verificação diária de anomalias na operação',
+  'Painel de negócios, leads e corretores',
+  'Exportação em CSV das listas',
+  'Teste grátis de 14 dias, sem cartão',
+];
+
+/** Ainda não entregue: não faz parte de nenhum plano pago. */
+const COMING_SOON = [
+  'Relatórios de avaliação em PDF',
+  'Imóveis comparáveis e histórico de preços na estimativa',
+  'Plano para corretores com mais estimativas e sem anúncios',
+  'API de estimativas para integrações',
 ];
 
 export default function PrecosPage() {
@@ -77,8 +103,16 @@ export default function PrecosPage() {
         <section style={{ marginTop: '3rem' }}>
           <h2>Auditoria para imobiliárias</h2>
           <p>
-            Planos da Auditoria. A configuração de integração, a cobertura dos dados e a ativação da
-            assinatura são confirmadas durante o cadastro.
+            Auditoria de vendas para imobiliárias que usam o Vista CRM. Todos os planos incluem:
+          </p>
+          <ul>
+            {AUDIT_FEATURES.map((feature) => (
+              <li key={feature}>{feature}</li>
+            ))}
+          </ul>
+          <p style={{ color: C.text2 }}>
+            Os planos diferem pelo número de corretores ativos. Se a operação passar do limite, os
+            dados continuam sendo importados e você recebe um aviso para trocar de plano.
           </p>
           <div
             style={{
@@ -93,7 +127,6 @@ export default function PrecosPage() {
                 <h3>{plan.name}</h3>
                 <p style={{ fontSize: '1.75rem' }}>R$ {plan.price}/mês</p>
                 <p>{plan.limit}</p>
-                <p>Dashboard e análise de anomalias da operação.</p>
                 <Link
                   href={`/auditoria/cadastro?plan=${encodeURIComponent(plan.id)}`}
                   style={{ color: C.accent }}
@@ -104,11 +137,26 @@ export default function PrecosPage() {
             ))}
           </div>
         </section>
-        <section id="waitlist" style={{ ...card, marginTop: '3rem' }}>
-          <h2>Novidades sobre estimativas profissionais</h2>
+        <section id="em-breve" style={{ ...card, marginTop: '3rem' }}>
+          <h2>Em breve</h2>
           <p>
-            Recursos como relatórios exportáveis e integrações estão em estudo. A inscrição não é
-            compra nem garante recursos, preço ou data de lançamento.
+            Estes recursos estão em desenvolvimento, sem data definida, e não fazem parte de nenhum
+            plano pago:
+          </p>
+          <ul>
+            {COMING_SOON.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <a href="#waitlist" style={{ color: C.accent }}>
+            Avise-me quando lançar →
+          </a>
+        </section>
+        <section id="waitlist" style={{ ...card, marginTop: '3rem' }}>
+          <h2>Lista de espera</h2>
+          <p>
+            Receba um aviso quando os recursos acima forem lançados. A inscrição não é compra nem
+            garante recursos, preço ou data de lançamento.
           </p>
           {sent ? (
             <p role="status" style={{ color: C.accent }}>

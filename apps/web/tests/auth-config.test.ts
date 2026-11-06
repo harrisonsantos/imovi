@@ -56,3 +56,19 @@ describe('production identity configuration', () => {
     ).rejects.toThrow('enviar');
   });
 });
+
+describe('aceite dos termos no cadastro', () => {
+  it('recusa sign-up sem aceite da versão vigente antes de tocar o banco', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    const auth = getAuth({
+      DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:1/fixture',
+      BETTER_AUTH_SECRET: 'x'.repeat(32),
+      BETTER_AUTH_URL: 'http://localhost:3000',
+    });
+    await expect(
+      auth.api.signUpEmail({
+        body: { name: 'Ana', email: 'ana@alfa.com', password: '12345678' },
+      }),
+    ).rejects.toThrow(/Termos de uso/);
+  });
+});

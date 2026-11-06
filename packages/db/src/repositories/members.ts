@@ -16,3 +16,7 @@ export const memberRepo = {
     return rows[0] ?? null;
   },
 };
+
+// Exposto por este módulo de identidade para não criar um novo subpath em
+// package.json: `@imovi/db/members` já é o ponto de entrada dos dados do usuário.
+export { termsRepo, type TermsAcceptanceInput } from './terms.js';

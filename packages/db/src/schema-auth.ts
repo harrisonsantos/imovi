@@ -15,6 +15,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  uuid,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable(
@@ -185,9 +186,31 @@ export const invitations = pgTable(
   }),
 );
 
+/**
+ * Trilha de aceite dos Termos de uso e da Política de privacidade (0008).
+ * Uma linha por usuário e versão dos termos; versões novas acumulam histórico.
+ */
+export const termsAcceptances = pgTable(
+  'terms_acceptances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    termsVersion: text('terms_version').notNull(),
+    privacyVersion: text('privacy_version').notNull(),
+    source: text('source').notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userVersionUx: uniqueIndex('terms_acceptances_user_version_ux').on(t.userId, t.termsVersion),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Organization = typeof organizations.$inferSelect;
 export type BillingEvent = typeof billingEvents.$inferSelect;
 export type Member = typeof members.$inferSelect;
 export type Invitation = typeof invitations.$inferSelect;
+export type TermsAcceptance = typeof termsAcceptances.$inferSelect;

@@ -21,6 +21,7 @@ const MIGRATION_FILES = [
   '0005_matriculas_pglite.sql',
   '0006_billing_pglite.sql',
   '0007_stabilization_pglite.sql',
+  '0008_terms_acceptance_pglite.sql',
 ];
 
 export interface TestDb {

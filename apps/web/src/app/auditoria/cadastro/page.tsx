@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { buildSignupBody, buildTermsAcceptanceBody, TERMS_ACCEPT_ENDPOINT } from '@/lib/cadastro';
+import { formatVersionDate, PRIVACY_VERSION, TERMS_VERSION } from '@/lib/terms-version';
 import { tokens as C } from '@/lib/tokens';
 
 const inputStyle: React.CSSProperties = {
@@ -55,12 +57,17 @@ export default function CadastroPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!termsAccepted) {
+      setError('Aceite os Termos de uso e a Política de privacidade para continuar.');
+      return;
+    }
     if (!existingAccount && password.length < 8) {
       setError('A senha precisa de pelo menos 8 caracteres.');
       return;
@@ -73,12 +80,8 @@ export default function CadastroPage() {
         const signup = await fetch('/api/auth/sign-up/email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            email,
-            password,
-            callbackURL: '/auditoria/login?verified=1',
-          }),
+          // O servidor recusa o cadastro sem aceite da versão vigente.
+          body: JSON.stringify(buildSignupBody({ name, email, password })),
         });
         if (!signup.ok) {
           const body = (await signup.json().catch(() => null)) as { message?: string } | null;
@@ -94,7 +97,20 @@ export default function CadastroPage() {
         }
       }
 
-      // 2. Cria a organização (imobiliária) — trial de 14 dias automático
+      // 2. Registra o aceite (versão + data/hora) para o usuário da sessão;
+      // sem ele o servidor não cria a imobiliária.
+      const termsRes = await fetch(TERMS_ACCEPT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildTermsAcceptanceBody()),
+      });
+      if (!termsRes.ok) {
+        const body = (await termsRes.json().catch(() => null)) as { message?: string } | null;
+        setError(body?.message ?? 'Não foi possível registrar o aceite dos termos.');
+        return;
+      }
+
+      // 3. Cria a organização (imobiliária) — trial de 14 dias automático
       const orgRes = await fetch('/api/auth/organization/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,7 +126,7 @@ export default function CadastroPage() {
         return;
       }
 
-      // 3. Define a org como ativa na sessão
+      // 4. Define a org como ativa na sessão
       const org = (await orgRes.json()) as { id?: string };
       if (org.id) {
         const active = await fetch('/api/auth/organization/set-active', {
@@ -253,7 +269,13 @@ export default function CadastroPage() {
               lineHeight: 1.5,
             }}
           >
-            <input type="checkbox" required style={{ marginTop: '0.2rem' }} />
+            <input
+              type="checkbox"
+              required
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              style={{ marginTop: '0.2rem' }}
+            />
             <span>
               Li e aceito os{' '}
               <Link href="/termos" target="_blank" style={{ color: C.accent }}>
@@ -262,8 +284,9 @@ export default function CadastroPage() {
               e a{' '}
               <Link href="/privacidade" target="_blank" style={{ color: C.accent }}>
                 Política de privacidade
-              </Link>
-              .
+              </Link>{' '}
+              (versão de {formatVersionDate(TERMS_VERSION)} e de{' '}
+              {formatVersionDate(PRIVACY_VERSION)}). A data e a versão do aceite ficam registradas.
             </span>
           </label>
 

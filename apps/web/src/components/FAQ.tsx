@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import { tokens as C } from '@/lib/tokens';
 
-const FAQS: [string, string][] = [
+export const FAQ_ITEMS: [string, string][] = [
   [
     'O imovi substitui um avaliador profissional?',
-    'O imovi é uma ferramenta de inteligência de preço para orientações de compra, venda e precificação. Para laudos com validade jurídica, um avaliador credenciado pelo CRECI continua sendo necessário.',
+    'Não. O imovi oferece uma referência heurística de valor para orientar conversas de compra, venda e precificação. Laudos de avaliação seguem a NBR 14653 e são emitidos por profissional habilitado, como corretor avaliador inscrito no CNAI ou engenheiro e arquiteto registrados.',
   ],
   [
     'De onde vêm os dados?',
@@ -22,7 +22,7 @@ const FAQS: [string, string][] = [
   ],
   [
     'Quais cidades são cobertas?',
-    'Estamos expandindo continuamente. São Paulo, Porto Alegre e Florianópolis estão no roadmap. Novas cidades são anunciadas conforme a base de dados atinge cobertura suficiente.',
+    'As cidades e bairros disponíveis aparecem no formulário. Uma cidade só é incluída quando há referência de preço para os bairros, e não divulgamos datas para novas cidades.',
   ],
   [
     'Meus dados ficam armazenados?',
@@ -59,7 +59,7 @@ export function FAQ() {
         >
           FAQ
         </h2>
-        {FAQS.map(([q, a], i) => (
+        {FAQ_ITEMS.map(([q, a], i) => (
           <div key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
             <button
               onClick={() => setOpen(open === i ? null : i)}

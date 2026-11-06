@@ -206,7 +206,7 @@ export function DataViz() {
           </div>
           <div style={{ flex: 1 }} />
           <p style={{ fontSize: '0.6875rem', color: C.text3, fontFamily: 'var(--font-mono)' }}>
-            Fontes: Zap Imóveis · OLX · VivaReal
+            Ilustração sem dados de mercado
           </p>
           <Link
             href="/metodologia"

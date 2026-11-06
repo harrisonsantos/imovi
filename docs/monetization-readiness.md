@@ -34,12 +34,15 @@ A base técnica de autenticação multi-tenant, isolamento por organização, tr
 
 ### P0 — confiança e contrato do produto
 
-- `/resultados` exibe um relatório fictício (Batel, R$ 1,054 milhão, comparáveis e histórico inventados) mesmo quando o usuário veio de uma estimativa real.
-- `/dashboard` é uma demonstração com usuário, carteira e métricas fictícios, mas não está rotulada como demo.
-- A página de preços promete comparáveis, PDF, histórico, API e cidades que ainda não estão ligados a direitos de acesso reais.
-- A lista de espera apenas troca o estado visual para “enviado”; nenhum contato é persistido.
+Status em 05/11/2026 (T3, branch `harrisonsantos/produto-p0`): todos os itens abaixo estão resolvidos no código.
 
-Esses pontos afetam confiança, suporte, chargebacks e risco consumerista. Antes do lançamento, ligar o relatório ao resultado real, rotular ou retirar o dashboard demo, persistir leads e vender apenas funcionalidades entregues.
+- [x] `/resultados` exibia um relatório fictício. **Resolvido na estabilização:** a página lê a estimativa salva por referência pública e mostra só valor, faixa, origem e referência do bairro.
+- [x] `/dashboard` era uma demonstração não rotulada. **Resolvido:** a rota só redireciona para `/auditoria` (autenticada), tem `noindex` e não aparece em navegação, sitemap ou `robots` permitido. A demonstração foi retirada em vez de rotulada, porque números fictícios de carteira passavam por dados de cliente.
+- [x] `/precos` prometia comparáveis, PDF, histórico, API e cidades. **Resolvido:** preço e limite dos planos vêm de `BILLING_PLANS` (a mesma fonte do checkout); os cards listam só o que a Auditoria entrega (importação do Vista CRM, verificação diária de anomalias, painel, exportação em CSV, teste de 14 dias). O plano Escala diz "Acima de 15 corretores" em vez de "ilimitado". PDF, comparáveis, histórico, plano para corretores e API ficam numa seção "Em breve", sem data, ligada à lista de espera.
+- [x] A lista de espera não persistia contatos. **Resolvido na estabilização:** `/api/waitlist` grava e-mail, origem e versão do consentimento em `waitlist_contacts`.
+- [x] Hero, FAQ e metodologia: ilustrações com valores fictícios não citam mais Zap/OLX/VivaReal como fonte; o FAQ não promete cidades futuras e indica quem emite laudo (NBR 14653); o JSON-LD da home não fala em "valor de mercado de imóveis no Brasil".
+
+Testes: `apps/web/tests/product-trust.test.ts`.
 
 ### P0 — operação de cobrança
 
@@ -54,7 +57,8 @@ Esses pontos afetam confiança, suporte, chargebacks e risco consumerista. Antes
 
 - Ativar verificação de e-mail antes de produção; hoje `requireEmailVerification` está desabilitado.
 - Tornar Turnstile obrigatório em produção e adicionar rate limit por IP/conta. “Estimativas ilimitadas” sem limite operacional permite abuso e custo sem receita.
-- Definir política de backup, restauração e exclusão por organização, além de trilha de aceite dos termos (hoje o checkbox não grava versão/data).
+- Definir política de backup, restauração e exclusão por organização.
+- [x] Trilha de aceite dos termos. **Resolvido (migration `0008_terms_acceptance`):** a tabela `terms_acceptances` guarda usuário, versão dos termos, versão da privacidade, origem e data/hora. O better-auth recusa `sign-up/email` sem o aceite da versão vigente (`apps/web/src/lib/terms-version.ts`), grava o aceite do novo usuário, e a criação da imobiliária exige aceite registrado (`POST /api/auditoria/termos`). Aplicar `0008` no Neon antes de publicar o código. Ao mudar o texto dos termos ou da privacidade, atualize a data em `terms-version.ts`: o próximo cadastro exige novo aceite e o histórico anterior é mantido.
 - Revisar termos e privacidade com assessoria jurídica brasileira antes do lançamento comercial.
 
 ## Modelo de planos recomendado
