@@ -12,8 +12,6 @@ import { requireSession, sessionGuard } from '@/lib/session';
 import { isCurrentTermsAcceptance, TERMS_REQUIRED_MESSAGE } from '@/lib/terms';
 import { PRIVACY_VERSION, TERMS_VERSION } from '@/lib/terms-version';
 
-export const runtime = 'edge';
-
 export async function POST(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();
   const appUrl = appUrlFromRequest(
