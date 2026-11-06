@@ -6,10 +6,7 @@ import type { InfoSimplesAdapter } from './adapters/infosimples.js';
 
 /** Adapter abstrato — qualquer coisa com `getIptu(address, taxYear)`. */
 export interface IptuAdapter {
-  getIptu(
-    address: NormalizedAddress,
-    taxYear: number,
-  ): Promise<IptuRecord | null>;
+  getIptu(address: NormalizedAddress, taxYear: number): Promise<IptuRecord | null>;
 }
 
 export interface FetchIptuOptions {
@@ -17,10 +14,10 @@ export interface FetchIptuOptions {
   taxYear: number;
   cache: IptuCache;
   /**
-   * Adapter da InfoSimples. Para cidades suportadas (SP/capital),
-   * é a fonte primária. Se não passado, só o cache é consultado.
+   * Adapter InfoSimples de SP/capital. Sem adapter, somente cache.
    */
   infoSimples?: InfoSimplesAdapter | IptuAdapter;
+  curitiba?: IptuAdapter;
   logger?: Logger;
 }
 
@@ -29,13 +26,12 @@ export interface FetchIptuOptions {
  *   1. Consulta cache (`getFresh`) — se hit, retorna sem chamar adapter.
  *   2. Seleciona adapter pela cidade/UF:
  *        - São Paulo / SP -> InfoSimples
- *        - outras        -> log warn + retorna null (TODO)
+ *        - Curitiba / PR -> adapter Curitiba
+ *        - outras        -> cobertura inexistente + null
  *   3. Em sucesso, grava no cache e retorna.
  *   4. Em falha do adapter, retorna null; nunca lança.
  */
-export async function fetchIptu(
-  opts: FetchIptuOptions,
-): Promise<IptuRecord | null> {
+export async function fetchIptu(opts: FetchIptuOptions): Promise<IptuRecord | null> {
   const { address, taxYear, cache } = opts;
   const logger = opts.logger ?? noopLogger;
 
@@ -50,7 +46,7 @@ export async function fetchIptu(
 
   const adapter = selectAdapter(opts);
   if (!adapter) {
-    logger.warn('fetchIptu: cidade não suportada', {
+    logger.warn('fetchIptu: cobertura inexistente', {
       city: address.city,
       state: address.state,
     });
@@ -78,10 +74,11 @@ export async function fetchIptu(
 /** Seleciona adapter com base em cidade/UF. */
 function selectAdapter(opts: FetchIptuOptions): IptuAdapter | null {
   const { address, infoSimples } = opts;
+  if (address.state === 'PR' && normalizeCity(address.city) === 'curitiba') {
+    return opts.curitiba ?? null;
+  }
   const isSpCapital =
-    address.state === 'SP' &&
-    normalizeCity(address.city) === 'sao paulo' &&
-    !!infoSimples;
+    address.state === 'SP' && normalizeCity(address.city) === 'sao paulo' && !!infoSimples;
   if (isSpCapital && infoSimples) {
     return infoSimples;
   }

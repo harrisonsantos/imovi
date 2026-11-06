@@ -49,6 +49,46 @@ function makeLogger(): Logger & {
 }
 
 describe('fetchIptu', () => {
+  it('seleciona Curitiba/PR sem usar adapter SP e armazena sucesso', async () => {
+    const cache = makeCache();
+    const record = makeRecord();
+    const curitiba = { getIptu: vi.fn().mockResolvedValue(record) };
+    const infoSimples = { getIptu: vi.fn() };
+    expect(
+      await fetchIptu({
+        address: { ...address, city: ' CURITIBA ', state: 'PR' },
+        taxYear: 2026,
+        cache,
+        curitiba,
+        infoSimples,
+      }),
+    ).toEqual(record);
+    expect(curitiba.getIptu).toHaveBeenCalledOnce();
+    expect(infoSimples.getIptu).not.toHaveBeenCalled();
+    expect(cache.put).toHaveBeenCalledOnce();
+  });
+
+  it('sinaliza cobertura inexistente em cidade sem adapter', async () => {
+    const logger = makeLogger();
+    const cache = makeCache();
+    const curitiba = { getIptu: vi.fn() };
+    expect(
+      await fetchIptu({
+        address: { ...address, city: 'Londrina', state: 'PR' },
+        taxYear: 2026,
+        cache,
+        curitiba,
+        logger,
+      }),
+    ).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      'fetchIptu: cobertura inexistente',
+      expect.any(Object),
+    );
+    expect(curitiba.getIptu).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
   it('usa cache.getFresh e NÃO chama adapter em hit', async () => {
     const cached = makeRecord();
     const cache = makeCache();

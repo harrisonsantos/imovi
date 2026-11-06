@@ -32,6 +32,40 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('InfoSimplesAdapter.getIptu', () => {
+  it('não preserva dados pessoais nem erro contendo segredo', async () => {
+    const logger = makeLogger();
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        data: [
+          {
+            numero_cadastro: '000',
+            exercicio: 2026,
+            valor_venal: '1000.00',
+            proprietario: 'PESSOA SINTETICA',
+            cpf: 'CPF-SINTETICO',
+          },
+        ],
+      }),
+    );
+    const adapter = new InfoSimplesAdapter({ apiToken: 'token-sintetico', fetchFn, logger });
+    const record = await adapter.getIptu(address, 2026);
+    expect(record).not.toBeNull();
+    expect(JSON.stringify(record)).not.toMatch(/PESSOA|CPF|proprietario/);
+    fetchFn.mockRejectedValueOnce(new Error('token-sintetico CPF-SINTETICO'));
+    expect(await adapter.getIptu(address, 2026)).toBeNull();
+    expect(JSON.stringify(logger.error.mock.calls)).not.toMatch(/token-sintetico|CPF/);
+  });
+
+  it.each([{}, { data: [] }, { code: 600, data: [{ valor_venal: '1000' }] }])(
+    'não aceita resposta sem resultado fiscal: %j',
+    async (body) => {
+      const adapter = new InfoSimplesAdapter({
+        apiToken: 'tok',
+        fetchFn: vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(body)),
+      });
+      expect(await adapter.getIptu(address, 2026)).toBeNull();
+    },
+  );
   it('mapeia resposta OK para IptuRecord com valores corretos', async () => {
     const fetchFn = vi.fn().mockResolvedValue(
       jsonResponse({
@@ -62,9 +96,7 @@ describe('InfoSimplesAdapter.getIptu', () => {
   });
 
   it('retorna null em 429 sem lançar', async () => {
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue(new Response('', { status: 429 }));
+    const fetchFn = vi.fn().mockResolvedValue(new Response('', { status: 429 }));
     const logger = makeLogger();
     const adapter = new InfoSimplesAdapter({
       apiToken: 'tok',

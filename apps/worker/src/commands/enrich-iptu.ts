@@ -1,20 +1,24 @@
 /**
  * Wire real do enrichment IPTU.
  *
- * MVP Curitiba: não existe adapter de IPTU público/automatizado para Curitiba
- * (InfoSimples só cobre SP/capital). A infra está pronta:
- *   - `listWithoutFreshIptu` lista properties candidatas
- *   - `fetchIptu` roteia por cidade; retorna null para Curitiba com log explícito
- *   - `iptuRepo.record` persiste quando um adapter for implementado
- *
- * Quando um adapter Curitiba for criado (ex.: scraper do portal da PMC),
- * basta injetá-lo em `fetchIptuAdapter.adapters` aqui.
+ * Adapters e cache injetados pela CLI/cron; sem consulta implícita ao env.
  */
 import { createDbClient, propertyRepo, iptuRepo, type Property as DbProperty } from '@imovi/db';
-import { fetchIptu, type IptuCache, type IptuRecord } from '@imovi/enrichment';
+import {
+  fetchIptu,
+  MemoryIptuCache,
+  sanitizeIptuRecord,
+  type IptuAdapter,
+  type IptuCache,
+  type IptuRecord,
+} from '@imovi/enrichment';
 
 import type { Logger } from '../logger.js';
-import { runEnrichIptu, type Property, type IptuRecord as PipelineIptuRecord } from '../pipeline/run-enrich.js';
+import {
+  runEnrichIptu,
+  type Property,
+  type IptuRecord as PipelineIptuRecord,
+} from '../pipeline/run-enrich.js';
 
 export interface EnrichIptuCommandOpts {
   limit?: number;
@@ -22,34 +26,18 @@ export interface EnrichIptuCommandOpts {
   logger: Logger;
   /** Ano fiscal alvo. Default: ano corrente. */
   taxYear?: number;
+  infoSimples?: IptuAdapter;
+  curitiba?: IptuAdapter;
+  cache?: IptuCache;
 }
 
-/**
- * No-op cache: sempre miss, descarta puts. Útil enquanto não temos uma
- * camada de cache dedicada (ex.: KV IPTU_CACHE) wireada.
- */
-const noopCache: IptuCache = {
-  async getFresh() {
-    return null;
-  },
-  async put() {
-    // descarta
-  },
-};
-
-export async function runEnrichIptuCommand(
-  opts: EnrichIptuCommandOpts,
-): Promise<void> {
+export async function runEnrichIptuCommand(opts: EnrichIptuCommandOpts): Promise<void> {
   const db = createDbClient({ connectionString: opts.databaseUrl });
   const taxYear = opts.taxYear ?? new Date().getUTCFullYear();
 
-  // Flag para logar "adapter ausente" só 1x por run pra evitar spam em lote.
-  let warnedCuritibaMissing = false;
+  const cache = opts.cache ?? new MemoryIptuCache();
 
-  const listProperties = async (
-    _db: unknown,
-    o: { limit?: number },
-  ): Promise<Property[]> => {
+  const listProperties = async (_db: unknown, o: { limit?: number }): Promise<Property[]> => {
     const rows = await propertyRepo.listWithoutFreshIptu(db, { limit: o.limit });
     return rows as unknown as Property[];
   };
@@ -66,13 +54,6 @@ export async function runEnrichIptuCommand(
       return null;
     }
 
-    if (p.city === 'Curitiba' && p.state === 'PR' && !warnedCuritibaMissing) {
-      warnedCuritibaMissing = true;
-      opts.logger.warn('curitiba_iptu_adapter_missing', {
-        hint: 'InfoSimples não cobre Curitiba. Adapter específico pendente.',
-      });
-    }
-
     const record = await fetchIptu({
       address: {
         street: p.street ?? '',
@@ -83,8 +64,9 @@ export async function runEnrichIptuCommand(
         cep: p.cep,
       } as unknown as Parameters<typeof fetchIptu>[0]['address'],
       taxYear,
-      cache: noopCache,
-      infoSimples: undefined,
+      cache,
+      infoSimples: opts.infoSimples,
+      curitiba: opts.curitiba,
       logger: opts.logger,
     });
 
@@ -93,13 +75,10 @@ export async function runEnrichIptuCommand(
     return { ...(record as IptuRecord), propertyId: p.id } as unknown as PipelineIptuRecord;
   };
 
-  const persistIptu = async (
-    _db: unknown,
-    record: PipelineIptuRecord,
-  ): Promise<void> => {
-    const r = record as unknown as IptuRecord & { propertyId: string };
+  const persistIptu = async (_db: unknown, record: PipelineIptuRecord): Promise<void> => {
+    const r = sanitizeIptuRecord(record as unknown as IptuRecord);
     await iptuRepo.record(db, {
-      propertyId: r.propertyId,
+      propertyId: record.propertyId,
       source: r.source,
       taxYear: r.taxYear,
       assessedValue: r.assessedValue !== null ? String(r.assessedValue) : null,
@@ -120,4 +99,5 @@ export async function runEnrichIptuCommand(
   });
 
   opts.logger.info('enrich_iptu_command_result', { ...result });
+  if (result.failed > 0) throw new Error(`enrich-iptu: ${result.failed} falha(s) no lote`);
 }
