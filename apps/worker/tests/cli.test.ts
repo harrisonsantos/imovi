@@ -4,6 +4,9 @@ import { parseArgs, runCli } from '../src/cli.js';
 import { silentLogger } from '../src/logger.js';
 
 describe('parseArgs', () => {
+  it('recognizes aggregation as a standalone job', () => {
+    expect(parseArgs(['aggregate-neighborhoods'])).toEqual({ command: 'aggregate-neighborhoods' });
+  });
   it('parseia scrape --source zap,vivareal --max 100', () => {
     const r = parseArgs(['scrape', '--source', 'zap,vivareal', '--max', '100']);
     expect(r).toEqual({
@@ -38,21 +41,36 @@ describe('parseArgs', () => {
 });
 
 describe('runCli', () => {
+  it('runs the standalone aggregator and propagates failures', async () => {
+    const aggregate = vi.fn(async () => {
+      throw new Error('aggregation failed');
+    });
+    const exit = vi.fn();
+    expect(
+      await runCli(['aggregate-neighborhoods'], {
+        env: { DATABASE_URL: 'postgres://x' },
+        exit,
+        logger: silentLogger,
+        runScrape: vi.fn(),
+        runEnrichIptu: vi.fn(),
+        runAggregateNeighborhoods: aggregate,
+      }),
+    ).toBe(1);
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(aggregate).toHaveBeenCalledOnce();
+  });
   it('scrape válido chama runScrape e exit(0)', async () => {
     const exit = vi.fn();
     const runScrape = vi.fn(async () => {});
     const runEnrichIptu = vi.fn(async () => {});
 
-    const code = await runCli(
-      ['scrape', '--source', 'zap', '--max', '10'],
-      {
-        env: { DATABASE_URL: 'postgres://x' },
-        exit,
-        logger: silentLogger,
-        runScrape,
-        runEnrichIptu,
-      },
-    );
+    const code = await runCli(['scrape', '--source', 'zap', '--max', '10'], {
+      env: { DATABASE_URL: 'postgres://x' },
+      exit,
+      logger: silentLogger,
+      runScrape,
+      runEnrichIptu,
+    });
 
     expect(code).toBe(0);
     expect(exit).toHaveBeenCalledWith(0);

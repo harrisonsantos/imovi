@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 import type { NormalizedListing, RawListing, ListingSource } from '@imovi/shared';
 
-import { runScrape, type RunScrapeDeps } from '../src/pipeline/run-scrape.js';
+import { runScrape, listingKey, type RunScrapeDeps } from '../src/pipeline/run-scrape.js';
 import { silentLogger } from '../src/logger.js';
 
 /** Helpers de factory para testes — reduzem ruído nas asserts. */
@@ -65,7 +65,7 @@ function makeDeps(overrides: Partial<RunScrapeDeps>): RunScrapeDeps {
     dedupe: (arr) => arr,
     db: {},
     repos: {
-      listings: { upsertBatch: vi.fn(async () => {}) },
+      listings: { upsertBatch: vi.fn(async () => 1) },
       properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
       errors: { record: vi.fn(async () => {}) },
     },
@@ -75,11 +75,62 @@ function makeDeps(overrides: Partial<RunScrapeDeps>): RunScrapeDeps {
 }
 
 describe('runScrape', () => {
+  it('preserves every source listing and shares one property per cluster', async () => {
+    const stored: Array<{ source: string; propertyId: string | undefined }> = [];
+    const propUpsert = vi.fn(async () => ({ id: 'shared-property' }));
+    const deps = makeDeps({
+      sources: ['zap', 'vivareal'],
+      scrapers: {
+        zap: () => genFromArr([makeRaw('zap', '1')]),
+        vivareal: () => genFromArr([makeRaw('vivareal', '1')]),
+      },
+      normalize: (raw) => ({ ...makeNormalized(raw.sourceListingId), source: raw.source }),
+      dedupe: (arr) => ({ clusters: [{ representative: arr[0]!, listings: arr }] }),
+      repos: {
+        listings: {
+          upsertBatch: vi.fn(async (_db, rows, ids) => {
+            for (const row of rows)
+              stored.push({ source: row.source, propertyId: ids?.get(listingKey(row)) });
+            return rows.length;
+          }),
+        },
+        properties: { upsertFromListing: propUpsert },
+        errors: { record: vi.fn(async () => {}) },
+      },
+    });
+    const result = await runScrape(deps);
+    expect(result.persisted).toBe(2);
+    expect(propUpsert).toHaveBeenCalledTimes(1);
+    expect(stored).toEqual([
+      { source: 'zap', propertyId: 'shared-property' },
+      { source: 'vivareal', propertyId: 'shared-property' },
+    ]);
+  });
+
+  it('does not count a listing as persisted when its write fails', async () => {
+    const deps = makeDeps({ scrapers: { zap: () => genFromArr([makeRaw('zap', '1')]) } });
+    deps.repos.listings.upsertBatch = vi.fn(async () => {
+      throw new Error('write failed');
+    });
+    const result = await runScrape(deps);
+    expect(result.persisted).toBe(0);
+    expect(result.errors).toBe(1);
+  });
+
+  it('records empty source results as source failure', async () => {
+    const deps = makeDeps({ scrapers: { zap: () => genFromArr([]) } });
+    const result = await runScrape(deps);
+    expect(result.errors).toBe(1);
+    expect(deps.repos.errors.record).toHaveBeenCalledWith(
+      deps.db,
+      expect.objectContaining({ source: 'zap', message: 'scraper_empty_result' }),
+    );
+  });
   it('orquestra dois sources, descarta inválidos no normalize, dedupa e persiste', async () => {
     const zapItems = [makeRaw('zap', 'z1'), makeRaw('zap', 'z2')];
     const vivaItems = [makeRaw('vivareal', 'v1')];
 
-    const listingsUpsert = vi.fn(async () => {});
+    const listingsUpsert = vi.fn(async () => 1);
     const propUpsert = vi.fn(async () => ({ id: 'test-prop-id' }));
 
     const deps = makeDeps({
@@ -121,7 +172,7 @@ describe('runScrape', () => {
         vivareal: () => genFromArr([makeRaw('vivareal', 'v1')]),
       },
       repos: {
-        listings: { upsertBatch: vi.fn(async () => {}) },
+        listings: { upsertBatch: vi.fn(async () => 1) },
         properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
         errors: { record },
       },
@@ -148,7 +199,7 @@ describe('runScrape', () => {
         return makeNormalized(raw.sourceListingId);
       },
       repos: {
-        listings: { upsertBatch: vi.fn(async () => {}) },
+        listings: { upsertBatch: vi.fn(async () => 1) },
         properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
         errors: { record: vi.fn(async () => {}) },
       },

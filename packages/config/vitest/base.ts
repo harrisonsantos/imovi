@@ -3,6 +3,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    // PGlite initializes a Postgres WASM instance per test. Bound resource use
+    // without increasing deadlines or skipping assertions.
+    maxWorkers: 1,
+    minWorkers: 1,
     globals: false,
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     coverage: {

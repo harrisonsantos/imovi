@@ -69,12 +69,12 @@ def make_synthetic_df(n: int = 500, seed: int = 42) -> pd.DataFrame:
         + bathrooms * 18000.0
         + parking * 12000.0
     )
-    mult = np.array([city_mult[c] * type_mult[t] for c, t in zip(city, property_type)])
+    mult = np.array([city_mult[c] * type_mult[t] for c, t in zip(city, property_type, strict=True)])
     noise = rng.normal(0.0, 30000.0, size=n)
     price = base * mult + noise
     price = np.maximum(price, 50000.0)  # clamp piso
 
-    return pd.DataFrame(
+    df = pd.DataFrame(
         {
             "area_m2": area_m2,
             "bedrooms": bedrooms,
@@ -87,3 +87,5 @@ def make_synthetic_df(n: int = 500, seed: int = 42) -> pd.DataFrame:
             "price": price,
         }
     )
+    df.attrs["synthetic"] = True
+    return df

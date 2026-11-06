@@ -50,7 +50,9 @@ export default async function BairroPage({ params }: Props) {
         Math.abs(b.medianPriceM2 - neighborhood.medianPriceM2),
     )
     .slice(0, 6);
-  const updated = neighborhood.lastAggregatedAt?.toLocaleDateString('pt-BR') ?? 'data recente';
+  const updated =
+    neighborhood.lastAggregatedAt?.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) ??
+    'data não disponível';
   const path = `/valor-imovel/${city.slug}/${neighborhood.slug}/`;
 
   return (
@@ -107,7 +109,8 @@ export default async function BairroPage({ params }: Props) {
             marginBottom: '.75rem',
           }}
         >
-          {neighborhood.listingCount} anúncios na amostra · atualizado em {updated}
+          {neighborhood.listingCount} imóveis distintos em anúncios de venda · atualizado em{' '}
+          {updated}
         </p>
         <h1
           style={{

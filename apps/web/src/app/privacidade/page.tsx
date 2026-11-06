@@ -23,12 +23,16 @@ export default function PrivacidadePage() {
         </h1>
         <p style={{ color: C.text2, lineHeight: 1.75, marginBottom: '2rem' }}>
           Esta página descreve, em linguagem direta, como o imovi trata dados no site público e no
-          produto de auditoria. Última atualização: 10 de julho de 2026.
+          produto de auditoria. Última atualização: 30 de setembro de 2026.
         </p>
         {[
           [
             'Dados fornecidos por você',
             'Dados de cadastro, organização, imóveis e integrações são usados para entregar estimativas e auditorias, autenticar usuários, prestar suporte e administrar a assinatura.',
+          ],
+          [
+            'Resultados públicos e lista de espera',
+            'Armazenamos os parâmetros do imóvel e a estimativa para consulta por uma referência pública não sequencial. Qualquer pessoa com o link pode ver esses parâmetros e o resultado; não informe dados pessoais. Salvamos o e-mail da lista de espera somente após consentimento. Você pode solicitar sua remoção pelo contato no rodapé.',
           ],
           [
             'Dados técnicos',

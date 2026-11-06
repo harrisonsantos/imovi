@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from imovi_training.features.builder import build_features
+from imovi_training.features.builder import build_features, compute_imputation_medians
 from tests.fixtures.synthetic_data import make_synthetic_df
 
 
@@ -22,6 +22,15 @@ def test_build_features_shapes_and_types() -> None:
     assert y.ndim == 1
     assert len(X) == len(y) == 100
     assert X.shape[1] == len(feature_names)
+
+
+def test_holdout_uses_training_imputation_not_test_median() -> None:
+    train = pd.DataFrame({"area_m2": [50, 70], "bedrooms": [1, 3], "price": [100, 200]})
+    test = pd.DataFrame({"area_m2": [None, 10000], "bedrooms": [None, 100], "price": [100, 200]})
+    medians = compute_imputation_medians(train)
+    X, _, names = build_features(test, imputation_medians=medians)
+    assert X[0, names.index("area_m2")] == 60
+    assert X[0, names.index("bedrooms")] == 2
 
 
 def test_build_features_imputes_missing_with_median() -> None:

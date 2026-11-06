@@ -12,15 +12,33 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=1",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mjs,json,md,yml,yaml}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mjs,json,md,yml,yaml}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mjs,json,md,yml,yaml}\"",
+    "validate": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "prettier": "^3.4.0",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "vitest": "3.2.6",
+      "drizzle-orm": "0.45.2",
+      "adm-zip": "0.6.1",
+      "protobufjs": "7.6.5",
+      "postcss": "8.5.23",
+      "nanoid@3": "3.3.18",
+      "sharp": "0.35.4",
+      "undici@7": "7.29.1",
+      "vite": "6.4.3"
+    },
+    "patchedDependencies": {
+      "@vercel/next@4.11.0": "patches/@vercel__next@4.11.0.patch",
+      "vercel@44.7.3": "patches/vercel@44.7.3.patch"
+    }
   }
 }

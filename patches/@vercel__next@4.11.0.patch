@@ -1,0 +1,13 @@
+diff --git a/dist/index.js b/dist/index.js
+index 1db6d01f53f1cf851590e163c2db398205b495ce..ad06181c1eeb9f71654de9ff74b6361538f00740 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -13398,7 +13398,7 @@ async function getServerlessPages(params) {
+     for (const [entry, normalizedEntry] of Object.entries(
+       params.appPathRoutesManifest
+     )) {
+-      const normalizedPath = `${import_path2.default.join(
++      const normalizedPath = `${import_path2.default.posix.join(
+         ".",
+         normalizedEntry === "/" ? "/index" : normalizedEntry
+       )}.js`;

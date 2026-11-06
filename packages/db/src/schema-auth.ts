@@ -12,6 +12,7 @@ import {
   integer,
   boolean,
   timestamp,
+  jsonb,
   uniqueIndex,
   index,
 } from 'drizzle-orm/pg-core';
@@ -112,6 +113,14 @@ export const organizations = pgTable(
     }),
     cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
     billingUpdatedAt: timestamp('billing_updated_at', { withTimezone: true }),
+    billingLastEventCreatedAt: timestamp('billing_last_event_created_at', { withTimezone: true }),
+    billingLeaseToken: text('billing_lease_token'),
+    billingLeaseExpiresAt: timestamp('billing_lease_expires_at', { withTimezone: true }),
+    billingCheckoutToken: text('billing_checkout_token'),
+    billingCheckoutPlanId: text('billing_checkout_plan_id'),
+    billingCheckoutSessionId: text('billing_checkout_session_id'),
+    billingCheckoutExpiresAt: timestamp('billing_checkout_expires_at', { withTimezone: true }),
+    billingCheckoutRequest: jsonb('billing_checkout_request').$type<Record<string, string>>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -127,7 +136,13 @@ export const organizations = pgTable(
 export const billingEvents = pgTable('billing_events', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),
-  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+  payload: jsonb('payload').$type<Record<string, unknown>>(),
+  status: text('status').notNull().default('pending'),
+  leaseToken: text('lease_token'),
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
 });
 
 export const members = pgTable(

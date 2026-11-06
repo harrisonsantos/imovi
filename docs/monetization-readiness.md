@@ -2,6 +2,10 @@
 
 Data da revisão: 10/07/2026
 
+Documento histórico. A implementação de estabilização e os gates atuais estão
+na [spec](specs/stabilization/spec.md), nas [evidências](specs/stabilization/evidence.md)
+e no [runbook](deploy-runbook.md). Este texto não comprova prontidão comercial atual.
+
 ## Resumo executivo
 
 O projeto tem dois produtos com economias diferentes:

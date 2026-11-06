@@ -20,6 +20,7 @@ const MIGRATION_FILES = [
   '0004_audit_pglite.sql',
   '0005_matriculas_pglite.sql',
   '0006_billing_pglite.sql',
+  '0007_stabilization_pglite.sql',
 ];
 
 export interface TestDb {
@@ -32,11 +33,11 @@ export interface TestDb {
  * Cria um banco pglite efêmero (em memória) com as tabelas aplicadas.
  * Use um handle por teste para isolamento total.
  */
-export async function createTestDb(): Promise<TestDb> {
+export async function createTestDb(opts: { through?: number } = {}): Promise<TestDb> {
   const pg = new PGlite();
   await pg.waitReady;
 
-  for (const file of MIGRATION_FILES) {
+  for (const file of MIGRATION_FILES.slice(0, opts.through)) {
     const sql = await readFile(join(__dirname, '..', 'migrations', file), 'utf8');
     // pglite aceita múltiplos statements via `.exec`.
     await pg.exec(sql);

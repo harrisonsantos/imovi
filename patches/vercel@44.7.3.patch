@@ -1,0 +1,31 @@
+diff --git a/dist/index.js b/dist/index.js
+index 97e66c8ab4899845fab07c0d5fb32ddd90b32f0d..85d15d25b02d735621b855260fb20baa29be8c9c 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -143971,8 +143971,24 @@ async function writeFunctionSymlink(outputDir, dest, fn2, existingFunctions) {
+   const destDir = (0, import_path21.dirname)(dest);
+   const targetDest = (0, import_path21.join)(outputDir, "functions", `${existingPath}.func`);
+   const target = (0, import_path21.relative)(destDir, targetDest);
+-  await import_fs_extra12.default.mkdirp(destDir);
+-  await import_fs_extra12.default.symlink(target, dest);
++  if (process.platform === "win32") {
++    const functionsRoot = (0, import_path21.resolve)(outputDir, "functions");
++    const absoluteTarget = (0, import_path21.resolve)(targetDest);
++    for (const functionPath of [absoluteTarget, (0, import_path21.resolve)(dest)]) {
++      const relativePath = (0, import_path21.relative)(functionsRoot, functionPath);
++      if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_path21.sep}`) || (0, import_path21.isAbsolute)(relativePath)) {
++        throw new Error("Function junction must stay within the build output functions directory");
++      }
++    }
++    if (!(await import_fs_extra12.default.lstat(absoluteTarget)).isDirectory()) {
++      throw new Error("Function junction target must be a directory");
++    }
++    await import_fs_extra12.default.mkdirp(destDir);
++    await import_fs_extra12.default.symlink(absoluteTarget, dest, "junction");
++  } else {
++    await import_fs_extra12.default.mkdirp(destDir);
++    await import_fs_extra12.default.symlink(target, dest);
++  }
+   return true;
+ }
+ async function writeEdgeFunction(repoRootPath, outputDir, edgeFunction, path11, existingFunctions) {

@@ -2,7 +2,7 @@
 // pro bundle edge.
 import { createDbClient, type DbClient } from '@imovi/db/client';
 
-let cached: DbClient | null = null;
+let cached: { url: string; db: DbClient } | null = null;
 
 /**
  * @param cfEnvUrl - DATABASE_URL lido por getRequestContext().env no caller.
@@ -11,11 +11,11 @@ let cached: DbClient | null = null;
  * para uma instância diferente da que o runtime popula.
  */
 export function getDb(cfEnvUrl?: string): DbClient {
-  if (cached) return cached;
   const url = cfEnvUrl ?? process.env.DATABASE_URL;
   if (!url) {
     throw new Error('DATABASE_URL não configurada no ambiente do worker.');
   }
-  cached = createDbClient({ connectionString: url });
-  return cached;
+  if (!cached || cached.url !== url)
+    cached = { url, db: createDbClient({ connectionString: url }) };
+  return cached.db;
 }

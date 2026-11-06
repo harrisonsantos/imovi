@@ -47,3 +47,15 @@ name = "imovi-web"   # Pages usa o mesmo projeto, branch = preview
 
 [env.preview.vars]
 NEXT_PUBLIC_APP_ENV = "preview"
+
+[[env.preview.kv_namespaces]]
+binding = "IPTU_CACHE"
+id = "cc01efc63dc34def97783f42ddf30282"
+
+[[env.preview.r2_buckets]]
+binding = "MODEL_ARTIFACTS"
+bucket_name = "imovi-model-artifacts-preview"
+
+[[env.preview.r2_buckets]]
+binding = "MATRICULAS"
+bucket_name = "imovi-matriculas-preview"
