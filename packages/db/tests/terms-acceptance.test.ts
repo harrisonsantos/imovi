@@ -66,11 +66,18 @@ describe('termsRepo — trilha de aceite dos termos', () => {
     expect(all.rows).toEqual([{ terms_version: '2026-07-10' }, { terms_version: '2027-01-15' }]);
   });
 
-  it('rejeita aceite de usuário inexistente e remove a trilha junto com o usuário', async () => {
+  it('rejeita aceite de usuário inexistente e impede excluir usuário com aceite registrado', async () => {
     await expect(termsRepo.record(t.db, { ...acceptance, userId: 'fantasma' })).rejects.toThrow();
     await termsRepo.record(t.db, acceptance);
-    await t.db.delete(users).where(eq(users.id, 'u-1'));
-    expect(await termsRepo.latest(t.db, 'u-1')).toBeNull();
+    // A Política promete guardar o aceite pelo prazo prescricional: excluir a
+    // conta não pode apagar a trilha em silêncio (ON DELETE RESTRICT).
+    await expect(t.db.delete(users).where(eq(users.id, 'u-1'))).rejects.toThrow();
+    expect(await termsRepo.hasAccepted(t.db, 'u-1', '2026-07-10')).toBe(true);
+    const fk = await t.raw.query<{ confdeltype: string }>(
+      `SELECT confdeltype FROM pg_constraint
+       WHERE conrelid = 'terms_acceptances'::regclass AND contype = 'f'`,
+    );
+    expect(fk.rows).toEqual([{ confdeltype: 'r' }]);
   });
 
   it('migration 0008 é idempotente e tem variante pglite idêntica à de produção', async () => {

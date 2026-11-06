@@ -194,9 +194,10 @@ export const termsAcceptances = pgTable(
   'terms_acceptances',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // restrict: excluir a conta não pode apagar a trilha de aceite.
     userId: text('user_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     termsVersion: text('terms_version').notNull(),
     privacyVersion: text('privacy_version').notNull(),
     source: text('source').notNull(),
