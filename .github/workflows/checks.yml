@@ -1,0 +1,58 @@
+name: Reusable checks
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm audit --prod --audit-level=high
+      - run: pnpm turbo run build --filter=@imovi/web^... --filter=@imovi/worker...
+      - name: Build web Worker (OpenNext)
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: '0x4AAAAAAC-vdQ1-_9T1AmV_'
+        run: pnpm build:cf
+      - name: Validate web Worker bundles
+        working-directory: apps/web
+        run: |
+          pnpm exec wrangler deploy --dry-run
+          pnpm exec wrangler deploy --dry-run --env=preview
+      - name: Validate Worker bundle
+        working-directory: apps/worker
+        run: pnpm exec wrangler deploy --dry-run
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.13'
+      - run: uv sync --frozen
+        working-directory: ml-training
+      - run: uv run --frozen pytest
+        working-directory: ml-training

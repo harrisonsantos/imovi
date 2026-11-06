@@ -1,6 +1,5 @@
 import { getCfEnv } from '@/lib/cf-env';
 
-export const runtime = 'edge';
 
 export async function GET(): Promise<Response> {
   const cfEnv = await getCfEnv();

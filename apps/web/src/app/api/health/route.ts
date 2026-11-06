@@ -6,16 +6,15 @@
  * mudar para 503 quando db='fail'.
  */
 import { sql } from '@imovi/db/operators';
+import { getCfEnv } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 
-export const runtime = 'edge';
 
 export async function GET(): Promise<Response> {
   const ts = new Date().toISOString();
   let dbStatus: 'ok' | 'fail' = 'fail';
   try {
-    const { getRequestContext } = await import('@cloudflare/next-on-pages');
-    const env = getRequestContext().env as Record<string, string>;
+    const env = await getCfEnv();
     const db = getDb(env.DATABASE_URL);
     await db.execute(sql`select 1`);
     dbStatus = 'ok';

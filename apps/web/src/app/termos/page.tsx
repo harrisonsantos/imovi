@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { Footer } from '@/components/Footer';
 import { Nav } from '@/components/Nav';
+import { formatVersionDate, TERMS_VERSION } from '@/lib/terms-version';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 export const metadata: Metadata = {
   title: 'Termos de uso',
   description: 'Condições de uso das estimativas, contas, trials e assinaturas do imovi.',
@@ -21,7 +21,8 @@ export default function TermosPage() {
           Termos de uso
         </h1>
         <p style={{ color: C.text2, lineHeight: 1.75, marginBottom: '2rem' }}>
-          Condições essenciais para uso do imovi. Última atualização: 10 de julho de 2026.
+          Condições essenciais para uso do imovi. Última atualização:{' '}
+          {formatVersionDate(TERMS_VERSION)}.
         </p>
         {[
           [

@@ -2,7 +2,6 @@ import type { MetadataRoute } from 'next';
 import { getSeoCatalog } from '@/lib/seo-data';
 import { SITE_URL } from '@/lib/seo';
 
-export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

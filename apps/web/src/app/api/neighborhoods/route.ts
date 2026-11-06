@@ -7,10 +7,10 @@
 import { and, eq, asc } from '@imovi/db/operators';
 import { neighborhoods } from '@imovi/db/schema';
 import { cityRepo } from '@imovi/db/cities';
+import { getCfEnv } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 
-export const runtime = 'edge';
 
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -19,8 +19,7 @@ export async function GET(req: Request): Promise<Response> {
 
   let db;
   try {
-    const { getRequestContext } = await import('@cloudflare/next-on-pages');
-    const env = getRequestContext().env as Record<string, string>;
+    const env = await getCfEnv();
     db = getDb(env.DATABASE_URL);
   } catch (err) {
      

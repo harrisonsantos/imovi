@@ -12,13 +12,19 @@
  */
 
 import { consoleLogger } from './logger.js';
+import { createDbClient } from '@imovi/db';
+import { sql } from '@imovi/db/operators';
 import { runScrapeCommand } from './commands/scrape.js';
 import { runEnrichIptuCommand } from './commands/enrich-iptu.js';
+import { createIptuAdapters } from './commands/iptu-config.js';
+import { KvIptuCache } from '@imovi/enrichment';
 import { runDailyAuditCommand, DEFAULT_EMAIL_FROM } from './commands/daily-audit.js';
 
 export interface Env {
   DATABASE_URL: string;
   IPTU_CACHE: KVNamespace;
+  INFOSIMPLES_TOKEN?: string;
+  INFOSIMPLES_CURITIBA_ENDPOINT?: string;
   HTML_SNAPSHOTS: R2Bucket;
   LOG_LEVEL?: string;
   /** Secret opcional — sem ela a auditoria roda sem enviar e-mails. */
@@ -48,10 +54,14 @@ export default {
           sources: ['zap', 'vivareal', 'olx'],
           databaseUrl,
           logger,
-        }).then(() => logger.info('worker_scrape_done', { cron: controller.cron }))
-          .catch((err: unknown) => logger.error('worker_scrape_error', {
-            error: err instanceof Error ? err.message : String(err),
-          }))
+        })
+          .then(() => logger.info('worker_scrape_done', { cron: controller.cron }))
+          .catch((err: unknown) => {
+            logger.error('worker_scrape_error', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            throw err;
+          }),
       );
     } else if (controller.cron === '0 7 * * 1') {
       // Enrich IPTU semanal
@@ -59,10 +69,16 @@ export default {
         runEnrichIptuCommand({
           databaseUrl,
           logger,
-        }).then(() => logger.info('worker_enrich_done', { cron: controller.cron }))
-          .catch((err: unknown) => logger.error('worker_enrich_error', {
-            error: err instanceof Error ? err.message : String(err),
-          }))
+          ...createIptuAdapters(env, logger),
+          cache: new KvIptuCache(env.IPTU_CACHE),
+        })
+          .then(() => logger.info('worker_enrich_done', { cron: controller.cron }))
+          .catch((err: unknown) => {
+            logger.error('worker_enrich_error', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            throw err;
+          }),
       );
     } else if (controller.cron === '0 8 * * *') {
       // Auditoria diária: detectores + relatório por e-mail
@@ -72,10 +88,15 @@ export default {
           resendApiKey: env.RESEND_API_KEY,
           emailFrom: env.EMAIL_FROM ?? DEFAULT_EMAIL_FROM,
           logger,
-        }).then((summary) => logger.info('worker_daily_audit_done', { cron: controller.cron, ...summary }))
-          .catch((err: unknown) => logger.error('worker_daily_audit_error', {
-            error: err instanceof Error ? err.message : String(err),
-          }))
+        })
+          .then((summary) =>
+            logger.info('worker_daily_audit_done', { cron: controller.cron, ...summary }),
+          )
+          .catch((err: unknown) =>
+            logger.error('worker_daily_audit_error', {
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          ),
       );
     } else {
       logger.warn('worker_unknown_cron', { cron: controller.cron });
@@ -88,6 +109,14 @@ export default {
    */
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === '/ready') {
+      try {
+        await createDbClient({ connectionString: env.DATABASE_URL }).execute(sql`SELECT 1`);
+        return Response.json({ status: 'ok', db: 'ok' });
+      } catch {
+        return Response.json({ status: 'unavailable', db: 'unavailable' }, { status: 503 });
+      }
+    }
     if (url.pathname === '/health') {
       return Response.json({
         status: 'ok',

@@ -1,10 +1,9 @@
 import { apiError } from '@/lib/errors';
 import { authEnvOf, getCfEnv } from '@/lib/cf-env';
 import { appUrlFromRequest, hasTrustedOrigin } from '@/lib/billing';
-import { requireOrgIdentity, sessionGuard } from '@/lib/session';
+import { requireOrgAdminIdentity, sessionGuard } from '@/lib/session';
 import { createPortalSession } from '@/lib/stripe-edge';
 
-export const runtime = 'edge';
 
 export async function POST(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();
@@ -17,9 +16,10 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const info = await requireOrgIdentity(req, authEnvOf(cfEnv));
+    const info = await requireOrgAdminIdentity(req, authEnvOf(cfEnv));
     const secretKey = cfEnv.STRIPE_SECRET_KEY ?? process.env.STRIPE_SECRET_KEY;
-    if (!secretKey || !info.org.stripeCustomerId) {
+    if (!secretKey) return apiError(503, 'billing_unavailable', 'Cobrança ainda não configurada.');
+    if (!info.org.stripeCustomerId) {
       return apiError(409, 'no_billing_account', 'Nenhuma assinatura encontrada para esta conta.');
     }
     const session = await createPortalSession({
@@ -33,7 +33,7 @@ export async function POST(req: Request): Promise<Response> {
     try {
       return sessionGuard(err);
     } catch {
-      console.error('[billing/portal] falha ao criar portal:', err);
+      console.error('[billing/portal] falha ao criar portal');
       return apiError(502, 'stripe_error', 'Não foi possível abrir o portal de cobrança.');
     }
   }

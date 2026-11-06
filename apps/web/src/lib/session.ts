@@ -8,9 +8,11 @@
  *
  * Ambos lançam `SessionError`, convertida em Response por `sessionGuard`.
  */
+import { memberRepo } from '@imovi/db/members';
 import { orgRepo } from '@imovi/db/orgs';
 import type { Organization } from '@imovi/db/schema-auth';
-import { getAuth, type AuthEnv } from './auth.js';
+import { AuthConfigurationError, getAuth, type AuthEnv } from './auth.js';
+import { isProductionEnv } from './cf-env.js';
 import { getDb } from './db.js';
 import { apiError } from './errors.js';
 
@@ -32,6 +34,7 @@ export interface SessionInfo {
 
 export interface OrgSessionInfo extends SessionInfo {
   org: Organization;
+  role: string;
 }
 
 type AuthApi = ReturnType<typeof getAuth>;
@@ -39,13 +42,17 @@ type AuthApi = ReturnType<typeof getAuth>;
 async function getSessionFromAuth(
   auth: AuthApi,
   headers: Headers,
+  env: AuthEnv,
 ): Promise<SessionInfo | null> {
   const session = await auth.api.getSession({ headers });
   if (!session) return null;
   const s = session as {
-    user: { id: string; email: string };
+    user: { id: string; email: string; emailVerified?: boolean };
     session: { activeOrganizationId?: string | null };
   };
+  if (isProductionEnv(env) && !s.user.emailVerified) {
+    throw new SessionError(403, 'email_unverified', 'Confirme seu e-mail antes de acessar.');
+  }
   return {
     userId: s.user.id,
     email: s.user.email,
@@ -53,12 +60,16 @@ async function getSessionFromAuth(
   };
 }
 
-export async function requireSession(
-  req: Request,
-  env: AuthEnv = {},
-): Promise<SessionInfo> {
-  const auth = getAuth(env);
-  const info = await getSessionFromAuth(auth, req.headers);
+export async function requireSession(req: Request, env: AuthEnv = {}): Promise<SessionInfo> {
+  let auth: AuthApi;
+  try {
+    auth = getAuth(env);
+  } catch (err) {
+    if (err instanceof AuthConfigurationError)
+      throw new SessionError(503, 'auth_unavailable', err.message);
+    throw err;
+  }
+  const info = await getSessionFromAuth(auth, req.headers, env);
   if (!info) {
     throw new SessionError(401, 'unauthorized', 'Sessão inválida ou expirada. Faça login.');
   }
@@ -99,10 +110,7 @@ export function assertOrgAccess(
 /** Resolve a organização da sessão sem aplicar o gate de assinatura.
  * Usado por checkout/portal para que um trial expirado ainda consiga pagar.
  */
-export async function requireOrgIdentity(
-  req: Request,
-  env: AuthEnv = {},
-): Promise<OrgSessionInfo> {
+export async function requireOrgIdentity(req: Request, env: AuthEnv = {}): Promise<OrgSessionInfo> {
   const session = await requireSession(req, env);
   if (!session.activeOrganizationId) {
     throw new SessionError(
@@ -113,18 +121,26 @@ export async function requireOrgIdentity(
   }
 
   const db = getDb(env.DATABASE_URL);
+  const member = await memberRepo.findByUserAndOrg(
+    db,
+    session.userId,
+    session.activeOrganizationId,
+  );
+  if (!member)
+    throw new SessionError(
+      403,
+      'membership_required',
+      'Seu acesso a esta organização foi revogado.',
+    );
   const org = await orgRepo.findById(db, session.activeOrganizationId);
   if (!org) {
     throw new SessionError(403, 'no_organization', 'Organização não encontrada.');
   }
 
-  return { ...session, org };
+  return { ...session, org, role: member.role };
 }
 
-export async function requireOrg(
-  req: Request,
-  env: AuthEnv = {},
-): Promise<OrgSessionInfo> {
+export async function requireOrg(req: Request, env: AuthEnv = {}): Promise<OrgSessionInfo> {
   const info = await requireOrgIdentity(req, env);
   assertOrgAccess(info.org);
   return info;
@@ -136,4 +152,25 @@ export function sessionGuard(err: unknown): Response {
     return apiError(err.status, err.code, err.message);
   }
   throw err;
+}
+
+export async function requireOrgAdminIdentity(
+  req: Request,
+  env: AuthEnv = {},
+): Promise<OrgSessionInfo> {
+  const info = await requireOrgIdentity(req, env);
+  if (!info.role.split(',').some((role) => ['owner', 'admin'].includes(role.trim()))) {
+    throw new SessionError(
+      403,
+      'admin_required',
+      'Somente administradores podem realizar esta ação.',
+    );
+  }
+  return info;
+}
+
+export async function requireOrgAdmin(req: Request, env: AuthEnv = {}): Promise<OrgSessionInfo> {
+  const info = await requireOrgAdminIdentity(req, env);
+  assertOrgAccess(info.org);
+  return info;
 }

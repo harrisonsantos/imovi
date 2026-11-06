@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import type { ListingSource } from '@imovi/shared';
 import { consoleLogger, type Logger } from './logger.js';
+import { createIptuAdapters } from './commands/iptu-config.js';
+import type { EnrichIptuCommandOpts } from './commands/enrich-iptu.js';
 
 /**
  * Resultado do parser de argumentos. Discriminated union por `command`
@@ -10,6 +12,7 @@ export type ParsedArgs =
   | { command: 'scrape'; sources: ListingSource[]; max?: number; pages?: number }
   | { command: 'enrich-iptu'; limit?: number }
   | { command: 'backfill-neighborhoods' }
+  | { command: 'aggregate-neighborhoods' }
   | { command: 'help' }
   | { command: 'unknown'; raw: string | undefined };
 
@@ -44,7 +47,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (command === 'scrape') {
     const sourceRaw = flags.get('source');
     const sources = sourceRaw
-      ? sourceRaw.split(',').map((s) => s.trim()).filter(isValidSource)
+      ? sourceRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(isValidSource)
       : [...VALID_SOURCES];
 
     const maxRaw = flags.get('max');
@@ -64,6 +70,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (command === 'backfill-neighborhoods') {
     return { command: 'backfill-neighborhoods' };
   }
+  if (command === 'aggregate-neighborhoods') return { command: 'aggregate-neighborhoods' };
 
   if (command === 'enrich-iptu') {
     const limitRaw = flags.get('limit');
@@ -92,15 +99,10 @@ export interface CliDeps {
     databaseUrl: string;
     logger: Logger;
   }) => Promise<void>;
-  runEnrichIptu: (opts: {
-    limit?: number;
-    databaseUrl: string;
-    logger: Logger;
-  }) => Promise<void>;
-  runBackfillNeighborhoods?: (opts: {
-    databaseUrl: string;
-    logger: Logger;
-  }) => Promise<unknown>;
+  runEnrichIptu: (opts: EnrichIptuCommandOpts) => Promise<void>;
+  iptuFetch?: typeof fetch;
+  runBackfillNeighborhoods?: (opts: { databaseUrl: string; logger: Logger }) => Promise<unknown>;
+  runAggregateNeighborhoods?: (opts: { databaseUrl: string; logger: Logger }) => Promise<unknown>;
 }
 
 const HELP_TEXT = `imovi-worker — jobs do Imovi (AVM)
@@ -109,6 +111,7 @@ Uso:
   imovi-worker scrape --source zap,vivareal --max 100
   imovi-worker enrich-iptu --limit 50
   imovi-worker backfill-neighborhoods
+  imovi-worker aggregate-neighborhoods
 
 Flags:
   --source   Lista separada por vírgula: zap,vivareal,olx (padrão: todas)
@@ -117,6 +120,8 @@ Flags:
 
 Env:
   DATABASE_URL   Obrigatório para scrape e enrich-iptu
+  INFOSIMPLES_TOKEN   Obrigatório para enrich-iptu
+  INFOSIMPLES_CURITIBA_ENDPOINT   Endpoint confirmado pelo fornecedor para Curitiba
 `;
 
 /** Executa o CLI com deps injetadas. Retorna o exit code que foi sinalizado. */
@@ -154,6 +159,10 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
         databaseUrl,
         logger: deps.logger,
       });
+    } else if (parsed.command === 'aggregate-neighborhoods') {
+      if (!deps.runAggregateNeighborhoods)
+        throw new Error('aggregate-neighborhoods não disponível');
+      await deps.runAggregateNeighborhoods({ databaseUrl, logger: deps.logger });
     } else if (parsed.command === 'backfill-neighborhoods') {
       if (!deps.runBackfillNeighborhoods) {
         throw new Error('backfill-neighborhoods não disponível neste entrypoint');
@@ -161,6 +170,7 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
       await deps.runBackfillNeighborhoods({ databaseUrl, logger: deps.logger });
     } else {
       await deps.runEnrichIptu({
+        ...createIptuAdapters(deps.env, deps.logger, deps.iptuFetch),
         ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
         databaseUrl,
         logger: deps.logger,
@@ -190,9 +200,9 @@ if (
 ) {
   const { runScrapeCommand } = await import('./commands/scrape.js');
   const { runEnrichIptuCommand } = await import('./commands/enrich-iptu.js');
-  const { runBackfillNeighborhoodsCommand } = await import(
-    './commands/backfill-neighborhoods.js'
-  );
+  const { runAggregateNeighborhoodsCommand } =
+    await import('./commands/aggregate-neighborhoods.js');
+  const { runBackfillNeighborhoodsCommand } = await import('./commands/backfill-neighborhoods.js');
 
   await runCli(process.argv.slice(2), {
     env: process.env,
@@ -200,6 +210,7 @@ if (
     logger: consoleLogger,
     runScrape: runScrapeCommand,
     runEnrichIptu: runEnrichIptuCommand,
+    runAggregateNeighborhoods: runAggregateNeighborhoodsCommand,
     runBackfillNeighborhoods: runBackfillNeighborhoodsCommand,
   });
 }

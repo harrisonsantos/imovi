@@ -8,7 +8,7 @@ psycopg é convertido pra `:nome` do sqlite pelo teste.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -65,6 +65,14 @@ def _sqlite_conn_with_sample_data() -> sqlite3.Connection:
         """
     )
     conn.commit()
+    conn.executescript("""
+      ALTER TABLE properties ADD COLUMN fingerprint TEXT;
+      UPDATE properties SET fingerprint = 'fp-' || id;
+      CREATE TABLE listing_snapshots
+        (listing_id TEXT, price REAL, captured_at TEXT, property_id TEXT, operation TEXT);
+      INSERT INTO listing_snapshots
+        SELECT id, price, scraped_at, property_id, operation FROM listings;
+    """)
     return conn
 
 
@@ -125,6 +133,8 @@ def test_export_columns_match_training_contract() -> None:
         "neighborhood",
         "scraped_at",
         "price",
+        "property_id",
+        "fingerprint",
     }
     assert set(df.columns) == expected
 
@@ -147,6 +157,8 @@ def test_export_training_data_passes_params_to_read_sql(monkeypatch) -> None:
                 "neighborhood",
                 "scraped_at",
                 "price",
+                "property_id",
+                "fingerprint",
             ]
         )
 
@@ -156,7 +168,7 @@ def test_export_training_data_passes_params_to_read_sql(monkeypatch) -> None:
         city="Curitiba",
         state="PR",
         operation="sale",
-        since=pd.Timestamp(datetime(2026, 1, 1, tzinfo=timezone.utc)),
+        since=pd.Timestamp(datetime(2026, 1, 1, tzinfo=UTC)),
     )
     assert list(df.columns) == [
         "area_m2",
@@ -168,6 +180,8 @@ def test_export_training_data_passes_params_to_read_sql(monkeypatch) -> None:
         "neighborhood",
         "scraped_at",
         "price",
+        "property_id",
+        "fingerprint",
     ]
     assert captured["params"] == {
         "city": "Curitiba",
@@ -176,4 +190,36 @@ def test_export_training_data_passes_params_to_read_sql(monkeypatch) -> None:
         "since": "2026-01-01T00:00:00+00:00",
     }
     assert "JOIN properties p" in captured["sql"]
-    assert "l.operation = %(operation)s" in captured["sql"]
+    assert "s.operation = %(operation)s" in captured["sql"]
+
+
+def test_export_uses_snapshot_dates_and_prices_not_overwritten_listing() -> None:
+    conn = _sqlite_conn_with_sample_data()
+    conn.execute("UPDATE listings SET scraped_at = '2099-01-01', price = 1 WHERE id = 'l1'")
+    conn.execute("""INSERT INTO listing_snapshots
+      VALUES ('l1', 550000, '2026-04-01T10:00:00+00:00', 'p1', 'sale')""")
+    df = _run_query(conn, city="Curitiba", state="PR", operation="sale", since=None)
+    observations = df[df["property_id"] == "p1"]
+    assert observations["price"].tolist() == [500000, 550000]
+    assert observations["scraped_at"].tolist() == [
+        "2026-03-01T10:00:00+00:00", "2026-04-01T10:00:00+00:00"
+    ]
+
+
+def test_export_uses_capture_identity_and_operation_not_future_listing_changes() -> None:
+    conn = _sqlite_conn_with_sample_data()
+    conn.execute("UPDATE listings SET property_id='p2',operation='sale' WHERE id='l6'")
+    conn.execute("UPDATE listings SET property_id='p4',operation='rent' WHERE id='l1'")
+    df = _run_query(conn, city="Curitiba", state="PR", operation="sale", since=None)
+    # l6's rental price must never become a sale target; l1 stays its original property.
+    assert sorted(df["price"].tolist()) == [500000, 900000]
+    assert df.loc[df["price"] == 500000, "property_id"].item() == "p1"
+    assert df.loc[df["price"] == 500000, "area_m2"].item() == 80
+
+
+def test_export_excludes_legacy_observations_with_unknown_identity_or_operation() -> None:
+    conn = _sqlite_conn_with_sample_data()
+    conn.execute("""INSERT INTO listing_snapshots
+      VALUES ('l1', 123000, '2026-01-01T10:00:00+00:00', NULL, NULL)""")
+    df = _run_query(conn, city="Curitiba", state="PR", operation="sale", since=None)
+    assert 123000 not in df["price"].tolist()

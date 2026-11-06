@@ -1,76 +1,58 @@
-/**
- * Carregamento do modelo AVM (ONNX) a partir do bucket R2 `MODEL_ARTIFACTS`.
- *
- * Convenção de layout no bucket:
- *   current/model.onnx             ← binário ONNX
- *   current/model.onnx.metadata.json ← sidecar JSON (contrato ml-infer)
- *
- * Edge runtime: usa `onnxruntime-web` (WASM) via subpath `@imovi/ml-infer/load-web`.
- * Cache em memória por instância (CF mantém o isolate vivo entre requests),
- * reduzindo latência do 2º request em diante.
- */
+/** Load active immutable AVM artifacts, with bounded isolate caching. */
 import type { ModelArtifact, EstimateInput, EstimateOutput } from '@imovi/ml-infer';
+import { createDbClient, modelVersionRepo } from '@imovi/db';
 import { estimate } from '@imovi/ml-infer/infer';
 import { loadModelWeb, createWebSessionFactory } from '@imovi/ml-infer/load-web';
 
 export interface R2ModelBindings {
   MODEL_ARTIFACTS?: R2Bucket;
+  DATABASE_URL?: string;
 }
 
-const MODEL_OBJECT_KEY = 'current/model.onnx';
-const METADATA_OBJECT_KEY = 'current/model.onnx.metadata.json';
-// Modelos quantile p10/p90 (opcionais) — intervalos calibrados.
-const MODEL_P10_KEY = 'current/model-p10.onnx';
-const MODEL_P90_KEY = 'current/model-p90.onnx';
-
-// Cache in-isolate. `null` = tentou e falhou; `undefined` = ainda não tentou.
-let cachedArtifact: ModelArtifact | null | undefined;
+const SUCCESS_TTL_MS = 5 * 60_000;
+const FAILURE_TTL_MS = 30_000;
+let cache:
+  | { bucket?: R2Bucket; databaseUrl?: string; expiresAt: number; artifact: ModelArtifact | null }
+  | undefined;
+let pending:
+  | { bucket?: R2Bucket; databaseUrl?: string; promise: Promise<ModelArtifact | null> }
+  | undefined;
+let generation = 0;
 
 export function clearModelCache(): void {
-  cachedArtifact = undefined;
+  cache = undefined;
+  pending = undefined;
+  generation += 1;
 }
 
-/**
- * Tenta carregar o artefato do R2. Retorna `null` se:
- *   - binding ausente
- *   - objeto não existe no bucket
- *   - metadata malformada
- *   - runtime WASM falha ao inicializar
- *
- * Callers devem fazer fallback pra heurística em caso de `null`.
- */
-export async function getModelArtifact(
-  env: R2ModelBindings,
-): Promise<ModelArtifact | null> {
-  if (cachedArtifact !== undefined) return cachedArtifact;
-
+async function loadActiveModel(env: R2ModelBindings): Promise<ModelArtifact | null> {
   const bucket = env.MODEL_ARTIFACTS;
-  if (!bucket) {
-    cachedArtifact = null;
-    return null;
-  }
-
+  if (!bucket || !env.DATABASE_URL) return null;
   try {
-    const [onnxObj, metaObj] = await Promise.all([
-      bucket.get(MODEL_OBJECT_KEY),
-      bucket.get(METADATA_OBJECT_KEY),
-    ]);
-    if (!onnxObj || !metaObj) {
-      cachedArtifact = null;
+    const active = await modelVersionRepo.getActive(
+      createDbClient({ connectionString: env.DATABASE_URL }),
+    );
+    if (!active?.artifactUrl || !/^[a-zA-Z0-9._-]+$/.test(active.version)) return null;
+    const key = `versions/${active.version}/model.onnx`;
+    // Reject mutable current/ paths and artifacts from another version.
+    if (
+      !active.artifactUrl.startsWith('r2://') ||
+      active.artifactUrl.split('/').slice(3).join('/') !== key
+    )
       return null;
-    }
-    const [onnxBytes, metaJson] = await Promise.all([
-      onnxObj.arrayBuffer(),
-      metaObj.text(),
+    const [onnxObj, metaObj] = await Promise.all([
+      bucket.get(key),
+      bucket.get(`${key}.metadata.json`),
     ]);
-    const artifact = await loadModelWeb(new Uint8Array(onnxBytes), metaJson);
-
-    // Modelos quantile p10/p90 (opcionais). Falha aqui não derruba o p50 —
-    // sem eles o infer usa o intervalo ±bps fixo.
+    if (!onnxObj || !metaObj) return null;
+    const [bytes, metadata] = await Promise.all([onnxObj.arrayBuffer(), metaObj.text()]);
+    const artifact = await loadModelWeb(new Uint8Array(bytes), metadata);
+    if (artifact.metadata.modelVersion !== active.version) return null;
     try {
+      const prefix = key.slice(0, -'model.onnx'.length);
       const [p10Obj, p90Obj] = await Promise.all([
-        bucket.get(MODEL_P10_KEY),
-        bucket.get(MODEL_P90_KEY),
+        bucket.get(`${prefix}model-p10.onnx`),
+        bucket.get(`${prefix}model-p90.onnx`),
       ]);
       if (p10Obj && p90Obj) {
         const factory = createWebSessionFactory();
@@ -85,19 +67,46 @@ export async function getModelArtifact(
         artifact.quantileSessions = { p10, p90 };
       }
     } catch {
-      // segue sem quantiles
+      // The p50 model remains usable without optional interval artifacts.
     }
-
-    cachedArtifact = artifact;
     return artifact;
   } catch {
-    // Qualquer falha → cache null pra não re-tentar todo request
-    cachedArtifact = null;
     return null;
   }
 }
 
-/** Atalho estimate com artefato do R2. `null` = deve usar heurística. */
+export async function getModelArtifact(env: R2ModelBindings): Promise<ModelArtifact | null> {
+  if (
+    cache &&
+    cache.bucket === env.MODEL_ARTIFACTS &&
+    cache.databaseUrl === env.DATABASE_URL &&
+    Date.now() < cache.expiresAt
+  ) {
+    return cache.artifact;
+  }
+  if (pending && pending.bucket === env.MODEL_ARTIFACTS && pending.databaseUrl === env.DATABASE_URL)
+    return pending.promise;
+  const startedGeneration = generation;
+  const promise = loadActiveModel(env).then((artifact) => {
+    if (generation === startedGeneration) {
+      cache = {
+        bucket: env.MODEL_ARTIFACTS,
+        databaseUrl: env.DATABASE_URL,
+        artifact,
+        expiresAt: Date.now() + (artifact ? SUCCESS_TTL_MS : FAILURE_TTL_MS),
+      };
+    }
+    return artifact;
+  });
+  const entry = { bucket: env.MODEL_ARTIFACTS, databaseUrl: env.DATABASE_URL, promise };
+  pending = entry;
+  try {
+    return await promise;
+  } finally {
+    if (pending === entry) pending = undefined;
+  }
+}
+
 export async function tryEstimateWithModel(
   env: R2ModelBindings,
   input: EstimateInput,

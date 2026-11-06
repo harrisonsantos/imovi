@@ -52,7 +52,7 @@ def test_run_backtest_produces_one_window_per_cutoff_with_valid_counts() -> None
     )
 
     assert len(windows) == 2
-    for w, c in zip(windows, cutoffs):
+    for w, c in zip(windows, cutoffs, strict=True):
         assert w.cutoff == c
         assert w.window_end == c + pd.DateOffset(months=1)
         assert w.n_train > 0

@@ -1,247 +1,68 @@
-# Imovi — Deploy Runbook (Cloudflare + Neon + GitHub)
+# Operação, staging e recuperação
 
-Este documento é o passo-a-passo para executar **no seu terminal Windows** (PowerShell ou Git Bash).
-Execute na ordem. Os arquivos de configuração já foram criados no repositório.
+Este runbook acompanha a spec `docs/specs/stabilization/spec.md`. Os comandos que escrevem em provedores exigem ambiente staging autorizado. Produção necessita aprovação explícita, backup e evidência de restauração. Nunca use credenciais reais de cobrança nos ensaios.
 
----
+## Ambientes e provedores
 
-## Pré-requisitos instalados
+- **Neon:** branch/banco isolado de staging com PostGIS e pgvector conforme migrations; `DATABASE_URL` como secret em ambos os Workers (web e jobs). Não reutilizar a URL de produção no preview.
+- **Web/OpenNext:** Worker `imovi-web` em produção e `imovi-web-preview` com `--env=preview`; `NEXT_PUBLIC_APP_ENV=preview` no build e no runtime de preview. `MODEL_ARTIFACTS` e `MATRICULAS` apontam para os buckets de preview declarados em `apps/web/wrangler.toml`. O binding `ASSETS` serve `.open-next/assets`; o entrypoint é `.open-next/worker.js`.
+- **Worker de jobs:** `--env=preview`, buckets separados e crons desativados; execute jobs de staging manualmente. `IPTU_CACHE` permanece apenas aqui: não há consumidor de KV em `apps/web`. A ausência de `--env` seleciona produção, nunca implicitamente em ensaios.
+- **R2:** provisionar `html-snapshots-preview`, `imovi-model-artifacts-preview`, `imovi-matriculas-preview` antes do deploy de preview. IDs KV devem ser conferidos na conta autorizada. Configuração no arquivo não prova existência do recurso.
+- **Auth:** `BETTER_AUTH_SECRET` aleatório >=32 caracteres, `BETTER_AUTH_URL` HTTPS correspondente ao ambiente. Remetente `EMAIL_FROM` verificado e `RESEND_API_KEY`; prod/preview exigem verificação de e-mail e falham fechados na ausência dessa configuração.
+- **Turnstile:** site key público embutido no build para o hostname correto, `TURNSTILE_SECRET` privado como binding. Ausência em produção/preview retorna indisponibilidade; token inválido é recusado. IP confiável vem do Cloudflare. `ESTIMATE_RATE_LIMIT_PER_MINUTE` padrão10, entre1 e1000; contador SQL compartilhado, IP somente em hash.
+- **Stripe:** `STRIPE_SECRET_KEY=sk_test_...`, `STRIPE_WEBHOOK_SECRET` de endpoint de sandbox e três `STRIPE_PRICE_AUDIT_*` de assinaturas. Endpoint `/api/billing/webhook`; habilitar checkout, atualização/exclusão de assinatura e eventos de fatura usados pela implementação. Configure portal em sandbox. Não aceitar Price IDs desconhecidos.
+- **Vista/IPTU:** `VISTA_KEY_SECRET` aleatório para cifrar chaves; credenciais Vista pertencem à organização. O job opcional/pago `enrich-iptu` exige `INFOSIMPLES_TOKEN`. CLI e cron injetam os adapters; Curitiba exige também `INFOSIMPLES_CURITIBA_ENDPOINT`, confirmado com o fornecedor. Sem adapter, o lote registra `cobertura inexistente` e falha. O contrato Curitiba foi testado com fixtures sintéticas; cobertura, credencial e resposta reais continuam **BLOCKED**. Consulte [contrato e evidências T4](specs/iptu-curitiba.md). CLI usa cache por execução e cron usa `IPTU_CACHE`, com validade de 365 dias por CEP/número/ano. Scraping utiliza allowlist e limites por fonte; não remova políticas para passar um check.
+- **GitHub:** environments `preview`, `production`, `model-training` com secrets mínimos; proteção/revisor obrigatório em production. Variáveis `WEB_URL`, `WORKER_URL` em cada environment apontam ao ambiente respectivo. R2/retraining deve usar bucket isolado até promoção aprovada.
 
-```powershell
-node --version   # >= 22
-pnpm --version   # >= 9
-```
+A lista de referência está em `.env.example`. Os dois Workers e cada ambiente têm escopos distintos: variáveis públicas de build não substituem bindings secretos de runtime. Secrets do projeto Pages não migram automaticamente para o Worker web.
 
----
+## Backup e migrations
 
-## Passo 1 — Validar acesso Cloudflare
+1. Registrar SHA do app, versões dos Workers web/jobs (e Pages anterior durante a transição), schema atual, counts e ativo de modelo. Criar backup/snapshot restaurável; registrar identificador fora do código. Demonstrar restauração numa branch isolada.
+2. Verificar duplicatas com `SELECT listing_id, captured_at, count(*) FROM listing_snapshots GROUP BY 1,2 HAVING count(*) > 1`. Se houver, parar e investigar; não apagar histórico automaticamente.
+3. Fazer preflight das migrations0001–0007 e do ledger `schema_migrations`. Instalações legadas sem ledger precisam conferir que migrations antigas são compatíveis com o schema real; não presumir que um banco já está atualizado.
+4. Em staging autorizado, configurar `DATABASE_URL` apenas no terminal seguro e executar `pnpm --filter @imovi/db db:migrate`. Cada migration e checksum têm uma transação; rerun pula arquivos registrados. Checksum alterado é erro. Não executar duas migrations simultaneamente.
+5. Confirmar tabelas/colunas/índices, snapshots com associações conhecidas e significado dos eventos antigos. Backfill preserva somente a última observação conhecida; snapshots antigos sem associação confiável ficam excluídos do ML.
+6. Fazer backfill de medianas em staging pelo comando `aggregate-neighborhoods` da CLI. Seeds são referências iniciais e não sobrescrevem medianas observadas.
 
-```powershell
-# Se CLOUDFLARE_API_TOKEN já está no env do usuário Windows, só execute:
-cd C:\unkownimbo
-pnpm dlx wrangler whoami
-```
+Rollback de app preserva migrations aditivas e dados novos. Reversão de schema exige decisão própria e backup, sem `DROP` automático.
 
-**Saída esperada:**
-```
-Getting User settings...
-👋 You are logged in with an API Token, associated with the email <seu-email>!
+## Aceite funcional em staging
 
-┌──────────────────────┬──────────────────────────────────┐
-│ Account Name         │ Account ID                       │
-├──────────────────────┼──────────────────────────────────┤
-│ <seu-account>        │ <account-id-32-chars>            │
-└──────────────────────┴──────────────────────────────────┘
-```
+Registrar evidência por critério da spec, sem segredos/PII nos logs:
 
-**Anote o `Account ID`** — vai ser necessário nos próximos passos.
+- Duas organizações, owner/admin/member: isolamento, membro removido perde acesso; membro comum não configura/cobra; token de sessão inválido recusado. Signup sem sessão até verificar link; link expirado/reutilizado e resend controlado.
+- Formulário com valores identificáveis: salvar UUID, comparar resposta, DTO e `/resultados?id=...`. Sem comparáveis/histórico inventados; origem seed/insuficiente/observada explícita. UUID desconhecido amigável, token Turnstile nunca persistido.
+- Turnstile inválido e configuração ausente; 11 tentativas no mesmo minuto/IP com limite10 produzem `429` e `Retry-After`. Outro IP independente. Lista de espera só confirma após persistência/consentimento.
+- Stripe sandbox: checkout, retorno, webhook, portal, troca de preço, cancelamento, falha/recuperação de pagamento, duplicata, entregas simultâneas, evento atrasado e interrupção entre gravações. Conferir estado no Stripe e organização; não confiar na página de sucesso.
+- Scrape datado, nova observação, falha de fonte/persistência registrada; amostra distinta>=20 e recência90dias. Mesmo imóvel não atravessa treino/teste temporal. Sem teste válido, métricas não promovem.
+- Derrubar dependência em staging: readiness503 e liveness responsiva. Restaurar e demonstrar retomada. Exercitar rollback de ambos os serviços sem alteração de dados.
 
-### Se falhar (401 / "Not Authenticated"):
+## Checks e publicação
 
-O token precisa das seguintes permissões:
-- `Account > Cloudflare Pages: Edit`
-- `Account > Workers Scripts: Edit`
-- `Account > Account Settings: Read`
-- `Account > Workers KV Storage: Edit`
-- `Account > R2 Storage: Edit`
+CI executa `checks.yml`: frozen install, lint, tipos, testes sequenciais, auditoria critical/high, Python, build OpenNext e dry-run do bundle web em produção/preview, além do bundle do Worker de jobs. Não publica em push. Deploy é `workflow_dispatch` com SHA completo; repete checks para esse SHA, passa pelo environment e executa smoke somente depois da publicação. O passo web usa `build:cf` e `opennextjs-cloudflare deploy`, ambos com `--env=preview` no preview; produção usa o ambiente padrão.
 
-Recrie em: https://dash.cloudflare.com/profile/api-tokens → "Create Token" → "Edit Cloudflare Workers" template, adicione Pages e R2.
+Preview exige infraestrutura provisionada e migrations aplicadas antes de `/ready` ou smoke. Produção exige SHA atual de main, `confirm_production=true` e aprovação de environment. Smoke local: configurar `WEB_URL`, `WORKER_URL` e `node scripts/smoke.mjs`; é somente leitura (health/readiness/cidades), não substitui a jornada autenticada e sandbox.
 
-```powershell
-# Depois de recriar, setar no PowerShell:
-$env:CLOUDFLARE_API_TOKEN = "novo-token"
-pnpm dlx wrangler whoami
-```
+## Transição de Pages para OpenNext
 
----
+A migração T2 substitui `@cloudflare/next-on-pages` e remove os patches Vercel. As rotas HTTP continuam no Worker Cloudflare, com runtime Next.js Node compatível com OpenNext; `/api/health` e `/api/ready` mantêm os contratos. O [guia OpenNext](https://opennext.js.org/cloudflare/get-started) descreve os artefatos e a [CLI](https://opennext.js.org/cloudflare/cli) define os comandos de build/publicação. Dry-run local não publica nem valida provedores reais.
 
-## Passo 2 — Provisionar Neon
+Antes de qualquer publicação autorizada:
 
-### 2a. Obter API Key Neon
-Acesse: https://console.neon.tech/app/settings/api-keys → "Create Key"
+1. Provisionar/verificar recursos isolados e configurar secrets no `imovi-web-preview`, incluindo DB, auth/e-mail, Turnstile e Stripe sandbox. Confirmar `MODEL_ARTIFACTS`, `MATRICULAS` e a referência ao próprio Worker no ambiente correto. Não copiar credenciais de produção. Tokens de CI precisam das permissões de Workers e dos recursos utilizados; permissões antigas de Pages não bastam.
+2. Executar o workflow no SHA candidato em preview. Ajustar `WEB_URL` ao hostname do Worker, `BETTER_AUTH_URL` e os hostnames autorizados de Turnstile. Validar assets, páginas antes servidas como edge, redirects, cookies/sessões, uploads/downloads R2, auth/e-mail e o ciclo Stripe sandbox descrito acima. Confirmar health/readiness e indisponibilidade/recuperação de dependências.
+3. Registrar versões, smoke, jornadas e rollback em staging. Não remover o projeto Pages nem alterar o domínio de produção nesta tarefa. Manter o deployment Pages anterior disponível até o corte autorizado e registrar a configuração anterior de DNS/rotas; não presumir que um Worker com o mesmo nome receba automaticamente o domínio Pages.
+4. Após G1–G3 e G7 do plano unificado, publicar o mesmo SHA validado e executar o corte de domínio como operação separada e autorizada. Em falha, restaurar a rota/domínio para Pages anterior; após a transição, retornar à versão anterior do Worker validada. Rollback de código/rota não restaura DB, R2 ou secrets: manter compatibilidade de dados e demonstrar a recuperação separadamente.
 
-### 2b. Rodar o script de setup
+**Decisão sobre `first-deploy.ps1`:** o script de `eaec4bf` (`claude/distracted-mcclintock`) não é incorporado. Ele publica Pages, fixa uma conta no código, continua após falha de provisionamento R2 e só configura `DATABASE_URL` depois do deploy, anunciando sucesso mesmo se essa configuração falhar. Adaptá-lo duplicaria o fluxo manual por SHA e seus gates. O caminho suportado é provisionamento/secrets prévios no ambiente autorizado e `deploy.yml`; nenhum deploy ou chamada a conta real faz parte da verificação local T2.
 
-```powershell
-# PowerShell (Windows nativo):
-cd C:\unkownimbo
-$env:NEON_API_KEY = "sua-api-key-neon"
-.\scripts\setup-neon.ps1
-```
+## Recuperação de cobrança e modelo
 
-O script vai:
-1. Criar projeto `imovi-prod` em `aws-us-east-2`
-2. Criar branch `main` (padrão) e branch `preview`
-3. Tentar aplicar `packages/db/migrations/0001_initial.sql`
-4. Gravar `DATABASE_URL` em `.env.local`
+`node scripts/replay-billing.mjs` lista somente a quantidade de eventos recuperáveis, sem efetuar POST. Com autorização para staging, `--apply` exige `DATABASE_URL`, `WEB_URL` HTTPS e `STRIPE_WEBHOOK_SECRET` do mesmo ambiente; reenvia eventos pendentes/lease expirado pelo endpoint assinado. Falha interrompe o lote; evento não concluído continua recuperável. Não alterar status manualmente para forçar sucesso.
 
-### 2c. Aplicar migration manualmente (se psql não estiver disponível)
+O modelo é publicado em `versions/<versao>/` antes da ativação em banco; `current/` não é sobrescrito. Gate exige treino/teste suficiente, identidades separadas e métricas finitas. Para reverter, selecionar versão anterior já validada em transação, nunca copiar novos bytes sobre a mesma versão. Cache da aplicação é limitado e retenta falha inicial; estimador público segue heurístico até spec de runtime ONNX e prova de inferência.
 
-```powershell
-# Instalar psql via chocolatey (se necessário):
-# choco install postgresql --params '/Password:dummy'
+## Pendências de liberação
 
-# Aplicar migration:
-$DATABASE_URL = (Get-Content .env.local | Where-Object { $_ -match "^DATABASE_URL=" }) -replace "^DATABASE_URL=",""
-psql $DATABASE_URL -f packages/db/migrations/0001_initial.sql
-```
-
----
-
-## Passo 3 — Criar recursos Cloudflare (KV + R2)
-
-```powershell
-cd C:\unkownimbo
-
-# KV Namespace para IPTU cache
-pnpm dlx wrangler kv namespace create IPTU_CACHE
-pnpm dlx wrangler kv namespace create IPTU_CACHE --preview
-# → Anote os IDs retornados
-
-# R2 Bucket para snapshots HTML
-pnpm dlx wrangler r2 bucket create html-snapshots
-```
-
-**Atualizar os IDs nos wrangler.toml:**
-
-Em `apps/worker/wrangler.toml` e `apps/web/wrangler.toml`, substituir:
-```toml
-[[kv_namespaces]]
-binding    = "IPTU_CACHE"
-id         = "REPLACE_WITH_KV_ID"        # ← colar ID real aqui
-preview_id = "REPLACE_WITH_KV_PREVIEW_ID" # ← colar preview ID aqui
-```
-
----
-
-## Passo 4 — Configurar secret DATABASE_URL no Worker
-
-```powershell
-cd C:\unkownimbo\apps\worker
-
-# Vai pedir para digitar o valor (não aparece no terminal)
-pnpm dlx wrangler secret put DATABASE_URL
-# Cole a DATABASE_URL do .env.local quando solicitado
-```
-
----
-
-## Passo 5 — Criar projeto Cloudflare Pages
-
-```powershell
-cd C:\unkownimbo\apps\web
-
-# Instalar dependências do apps/web
-cd C:\unkownimbo
-pnpm install
-
-# Build do apps/web para CF Pages
-pnpm turbo run build --filter=@imovi/web^...
-cd apps/web && pnpm build:cf
-
-# Criar projeto Pages (só na primeira vez)
-pnpm dlx wrangler pages project create imovi-web --production-branch=main
-
-# Deploy de smoke test
-pnpm dlx wrangler pages deploy .vercel/output/static --project-name=imovi-web
-```
-
-**A URL `.pages.dev` aparece na saída do deploy.**
-
----
-
-## Passo 6 — Smoke test do Worker
-
-```powershell
-cd C:\unkownimbo
-
-# Build de todos os pacotes + worker
-pnpm turbo run build --filter=@imovi/worker...
-
-# Deploy do worker
-cd apps/worker
-pnpm dlx wrangler deploy
-
-# Confirmar que está up:
-pnpm dlx wrangler tail imovi-worker
-# Em outro terminal, disparar manualmente:
-pnpm dlx wrangler cron trigger imovi-worker
-```
-
----
-
-## Passo 7 — Criar repo GitHub e configurar secrets
-
-```powershell
-cd C:\unkownimbo
-
-# Autenticar (se GITHUB_TOKEN está no env, gh usa automaticamente)
-gh auth status
-
-# Criar repo privado
-gh repo create imovi --private --source=. --remote=origin --push
-
-# OU se o repo já existir mas sem remote:
-git remote add origin https://github.com/<seu-usuario>/imovi.git
-git branch -M main
-git push -u origin main
-
-# Configurar os 3 secrets obrigatórios
-gh secret set CLOUDFLARE_API_TOKEN
-# → cole o token quando solicitado
-
-gh secret set CLOUDFLARE_ACCOUNT_ID
-# → cole o account ID do passo 1
-
-gh secret set DATABASE_URL
-# → cole a DATABASE_URL do .env.local
-```
-
----
-
-## Passo 8 — Verificar CI/CD
-
-Após o push em `main`, o workflow `deploy.yml` vai disparar automaticamente.
-
-```powershell
-# Acompanhar:
-gh run watch
-```
-
-Dois jobs devem ficar verdes:
-- `Deploy → Cloudflare Pages (apps/web)`
-- `Deploy → Cloudflare Worker (apps/worker)`
-
----
-
-## Checklist final
-
-| Item                            | Comando de verificação                          |
-|---------------------------------|-------------------------------------------------|
-| CF account_id                   | `pnpm dlx wrangler whoami`                      |
-| Neon projeto criado             | `curl https://console.neon.tech/api/v2/projects -H "Authorization: Bearer $NEON_API_KEY"` |
-| Migration aplicada              | `psql $DATABASE_URL -c "\dt"`                   |
-| KV IDs nos wrangler.toml        | grep `REPLACE_WITH_KV_ID` apps/*/wrangler.toml  |
-| Worker deployado                | `pnpm dlx wrangler deployments list imovi-worker` |
-| Pages deployado                 | URL `https://imovi-web.pages.dev`               |
-| GitHub secrets configurados     | `gh secret list`                               |
-
----
-
-## Arquivos criados neste setup
-
-```
-apps/worker/wrangler.toml          ← Worker config (crons, KV, R2)
-apps/web/package.json              ← Next.js 15 + @cloudflare/next-on-pages
-apps/web/next.config.mjs           ← Config CF-compat (edge, no Image Optimization)
-apps/web/wrangler.toml             ← Pages config
-apps/web/tsconfig.json
-apps/web/src/app/layout.tsx        ← Layout raiz
-apps/web/src/app/page.tsx          ← Página home (runtime edge)
-.github/workflows/deploy.yml       ← CI/CD (deploy-pages + deploy-worker)
-.env.example                       ← Template de variáveis
-scripts/setup-neon.sh              ← Provisiona Neon via API
-docs/deploy-runbook.md             ← Este arquivo
-```
-
-> **Lembre:** `.env.local` está no `.gitignore` e nunca deve ser commitado.
+Backup/restauração, banco real, provedores, sandbox, corte de domínio e rollback externo devem constar nas evidências. Status local PASS não significa produção pronta. A migração do adaptador ainda depende de aceite em preview e do corte autorizado; ativação ML e ampliação comercial têm aceite próprio.

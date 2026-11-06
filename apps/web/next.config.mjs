@@ -1,13 +1,9 @@
 // @ts-check
-import { setupDevPlatform } from '@cloudflare/next-on-pages/next-dev';
+import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Necessário para @cloudflare/next-on-pages
-  // O runtime edge permite rodar na Cloudflare Pages Functions
-  // (cada route opt-in individualmente via `export const runtime = 'edge'`)
-
-  // Desabilita Image Optimization — não suportada no CF Pages sem Worker extra
+  // Mantém imagens sem transformação; não requer um binding Cloudflare Images.
   images: {
     unoptimized: true,
   },
@@ -63,10 +59,9 @@ const nextConfig = {
   },
 };
 
-// Em desenvolvimento, injeta as bindings do wrangler.toml (KV, R2, etc.)
-// O await top-level só funciona em ESM — next.config.mjs já é ESM, ok.
+// Em desenvolvimento, disponibiliza os bindings locais do wrangler.toml.
 if (process.env.NODE_ENV === 'development') {
-  await setupDevPlatform();
+  await initOpenNextCloudflareForDev();
 }
 
 export default nextConfig;

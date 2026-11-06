@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import { ConsentResetButton } from '@/components/ads/ConsentResetButton';
 import { Footer } from '@/components/Footer';
 import { Nav } from '@/components/Nav';
+import { formatVersionDate, PRIVACY_VERSION } from '@/lib/terms-version';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 export const metadata: Metadata = {
   title: 'Política de privacidade',
   description: 'Saiba como o imovi trata dados pessoais, cookies, pagamentos e publicidade.',
@@ -23,12 +23,20 @@ export default function PrivacidadePage() {
         </h1>
         <p style={{ color: C.text2, lineHeight: 1.75, marginBottom: '2rem' }}>
           Esta página descreve, em linguagem direta, como o imovi trata dados no site público e no
-          produto de auditoria. Última atualização: 10 de julho de 2026.
+          produto de auditoria. Última atualização: {formatVersionDate(PRIVACY_VERSION)}.
         </p>
         {[
           [
             'Dados fornecidos por você',
             'Dados de cadastro, organização, imóveis e integrações são usados para entregar estimativas e auditorias, autenticar usuários, prestar suporte e administrar a assinatura.',
+          ],
+          [
+            'Resultados públicos e lista de espera',
+            'Armazenamos os parâmetros do imóvel e a estimativa para consulta por uma referência pública não sequencial. Qualquer pessoa com o link pode ver esses parâmetros e o resultado; não informe dados pessoais. Salvamos o e-mail da lista de espera somente após consentimento. Você pode solicitar sua remoção pelo contato no rodapé.',
+          ],
+          [
+            'Registro do aceite dos termos',
+            'Quando você aceita os Termos de uso e esta Política, guardamos o identificador da sua conta, a versão dos Termos de uso, a versão desta Política, a origem do aceite (cadastro da conta ou da imobiliária) e a data e hora do aceite. Usamos esse registro para comprovar o aceite e o contrato firmado com você. A base legal é a execução de contrato e o cumprimento de obrigação legal (LGPD, art. 7º, incisos V e II). Mantemos o registro enquanto a conta existir e, depois disso, pelo prazo prescricional aplicável. Quando os documentos mudam, um novo aceite é registrado e cada versão aceita fica preservada no histórico.',
           ],
           [
             'Dados técnicos',

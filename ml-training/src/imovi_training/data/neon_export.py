@@ -1,6 +1,6 @@
 """Export do dataset de treino do Neon Postgres → parquet.
 
-Consulta canônica: `listings JOIN properties LEFT JOIN neighborhoods`
+Consulta canônica: `listing_snapshots JOIN listings JOIN properties LEFT JOIN neighborhoods`
 filtrada para uma cidade/estado/operação. O shape de colunas bate com o
 contrato de `loader.load_training_data()` / `features.build_features()`.
 
@@ -34,18 +34,20 @@ SELECT
     p.property_type         AS property_type,
     p.city                  AS city,
     n.name                  AS neighborhood,
-    l.scraped_at            AS scraped_at,
-    l.price::float8         AS price
-FROM listings l
-JOIN properties p     ON p.id = l.property_id
+    s.captured_at           AS scraped_at,
+    s.price::float8          AS price,
+    p.id                    AS property_id,
+    p.fingerprint           AS fingerprint
+FROM listing_snapshots s
+JOIN properties p ON p.id = s.property_id
 LEFT JOIN neighborhoods n ON n.id = p.neighborhood_id
-WHERE l.price IS NOT NULL
-  AND p.area_m2 IS NOT NULL
+WHERE s.price > 0
+  AND p.area_m2 > 0
   AND p.city    = %(city)s
   AND p.state   = %(state)s
-  AND l.operation = %(operation)s
-  AND (%(since)s::timestamptz IS NULL OR l.scraped_at >= %(since)s::timestamptz)
-ORDER BY l.scraped_at
+  AND s.operation = %(operation)s
+  AND (%(since)s::timestamptz IS NULL OR s.captured_at >= %(since)s::timestamptz)
+ORDER BY s.captured_at, p.id
 """.strip()
 
 
@@ -71,6 +73,9 @@ def export_training_data(
         "since": since.isoformat() if since is not None else None,
     }
     df = pd.read_sql(TRAINING_EXPORT_SQL, conn, params=params)
+    for identity in ("property_id", "fingerprint"):
+        if identity not in df.columns or df[identity].isna().any():
+            raise ValueError(f"Production export requires complete {identity}")
     # Normaliza tipos: inteiros nullable do Postgres viram `Int64` — convertemos
     # pra float compatível com build_features (que faz pd.to_numeric depois).
     for col in ("bedrooms", "bathrooms", "parking"):

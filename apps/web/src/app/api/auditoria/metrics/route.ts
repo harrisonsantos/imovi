@@ -15,7 +15,6 @@ import { getCfEnv, authEnvOf } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 import { requireOrg, sessionGuard, type OrgSessionInfo } from '@/lib/session';
 
-export const runtime = 'edge';
 
 export async function GET(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();

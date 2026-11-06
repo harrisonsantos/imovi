@@ -16,7 +16,10 @@
     "./schema-audit": "./src/schema-audit.ts",
     "./orgs": "./src/repositories/orgs.ts",
     "./billing": "./src/repositories/billing.ts",
-    "./operators": "./src/operators.ts"
+    "./operators": "./src/operators.ts",
+    "./members": "./src/repositories/members.ts",
+    "./waitlist": "./src/repositories/waitlist.ts",
+    "./rate-limit": "./src/repositories/rate-limit.ts"
   },
   "scripts": {
     "build": "tsc --build",
@@ -25,7 +28,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --experimental-specifier-resolution=node ./src/migrate.ts",
+    "db:migrate": "tsx src/migrate.ts",
     "seed:curitiba": "tsx seeds/curitiba.ts",
     "seed:cities": "tsx seeds/cities.ts",
     "seed:porto-alegre": "tsx seeds/porto-alegre.ts",
@@ -35,17 +38,17 @@
   "dependencies": {
     "@imovi/shared": "workspace:*",
     "@neondatabase/serverless": "^0.10.3",
-    "drizzle-orm": "^0.36.4",
+    "drizzle-orm": "0.45.2",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.2.14",
     "@imovi/config": "workspace:*",
     "@types/node": "^22.10.0",
-    "drizzle-kit": "^0.28.1",
+    "drizzle-kit": "0.31.10",
     "eslint": "^9.17.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.8"
+    "vitest": "3.2.6"
   }
 }

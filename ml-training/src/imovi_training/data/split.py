@@ -28,6 +28,19 @@ def temporal_split(
         cutoff = cutoff.tz_localize(None)
     train_mask = ts < cutoff
 
+    identities = [col for col in ("property_id", "fingerprint") if col in df.columns]
+    if not identities and not df.attrs.get("synthetic", False):
+        raise ValueError(
+            "Temporal validation requires property identity (synthetic fixtures must be marked)"
+        )
+    if ts.isna().any():
+        raise ValueError("Temporal validation requires valid observation timestamps")
+    for identity in identities:
+        if df[identity].isna().any() or (df[identity].astype(str).str.strip() == "").any():
+            raise ValueError(f"Temporal validation requires complete {identity}")
+        test_properties = set(df.loc[ts >= cutoff, identity])
+        train_mask &= ~df[identity].isin(test_properties)
+
     train = df.loc[train_mask].reset_index(drop=True)
-    test = df.loc[~train_mask].reset_index(drop=True)
+    test = df.loc[ts >= cutoff].reset_index(drop=True)
     return train, test

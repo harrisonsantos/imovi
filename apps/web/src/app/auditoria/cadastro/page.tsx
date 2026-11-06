@@ -1,26 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { buildSignupBody, buildTermsAcceptanceBody, TERMS_ACCEPT_ENDPOINT } from '@/lib/cadastro';
+import { formatVersionDate, PRIVACY_VERSION, TERMS_VERSION } from '@/lib/terms-version';
 import { tokens as C } from '@/lib/tokens';
 
 const inputStyle: React.CSSProperties = {
-  width:        '100%',
-  padding:      '0.6875rem 0.875rem',
-  background:   C.surface3,
-  border:       `1px solid ${C.border}`,
+  width: '100%',
+  padding: '0.6875rem 0.875rem',
+  background: C.surface3,
+  border: `1px solid ${C.border}`,
   borderRadius: '8px',
-  color:        C.text,
-  fontSize:     '0.875rem',
-  fontFamily:   'var(--font-body)',
-  transition:   'border-color 0.15s',
+  color: C.text,
+  fontSize: '0.875rem',
+  fontFamily: 'var(--font-body)',
+  transition: 'border-color 0.15s',
 };
 const labelStyle: React.CSSProperties = {
-  display:      'block',
-  fontSize:     '0.75rem',
-  fontWeight:   500,
-  color:        C.text2,
+  display: 'block',
+  fontSize: '0.75rem',
+  fontWeight: 500,
+  color: C.text2,
   marginBottom: '0.3125rem',
 };
 
@@ -37,35 +39,78 @@ function slugify(name: string): string {
 
 export default function CadastroPage() {
   const router = useRouter();
-  const [orgName, setOrgName]   = useState('');
-  const [name, setName]         = useState('');
-  const [email, setEmail]       = useState('');
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [existingAccount, setExistingAccount] = useState(false);
+  const [confirmation, setConfirmation] = useState(false);
+  useEffect(() => {
+    setOrgName(sessionStorage.getItem('imovi:org-draft') ?? '');
+    void fetch('/api/auth/get-session')
+      .then((res) => res.json())
+      .then((raw: unknown) => {
+        const data = raw as { user?: { emailVerified?: boolean } } | null;
+        if (data?.user) setExistingAccount(true);
+      })
+      .catch(() => undefined)
+      .finally(() => setCheckingSession(false));
+  }, []);
+  const [orgName, setOrgName] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError]       = useState<string | null>(null);
-  const [loading, setLoading]   = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (password.length < 8) {
+    if (!termsAccepted) {
+      setError('Aceite os Termos de uso e a Política de privacidade para continuar.');
+      return;
+    }
+    if (!existingAccount && password.length < 8) {
       setError('A senha precisa de pelo menos 8 caracteres.');
       return;
     }
     setLoading(true);
     try {
-      // 1. Cria o usuário (better-auth já autentica a sessão no signup)
-      const signup = await fetch('/api/auth/sign-up/email', {
+      sessionStorage.setItem('imovi:org-draft', orgName);
+      if (!existingAccount) {
+        // Confirmação de e-mail antecede o provisionamento da imobiliária.
+        const signup = await fetch('/api/auth/sign-up/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // O servidor recusa o cadastro sem aceite da versão vigente.
+          body: JSON.stringify(buildSignupBody({ name, email, password })),
+        });
+        if (!signup.ok) {
+          const body = (await signup.json().catch(() => null)) as { message?: string } | null;
+          setError(body?.message ?? 'Não foi possível criar a conta.');
+          return;
+        }
+
+        const sessionResponse = await fetch('/api/auth/get-session');
+        const session = (await sessionResponse.json()) as { user?: unknown } | null;
+        if (!session?.user) {
+          setConfirmation(true);
+          return;
+        }
+      }
+
+      // 2. Registra o aceite (versão + data/hora) para o usuário da sessão;
+      // sem ele o servidor não cria a imobiliária.
+      const termsRes = await fetch(TERMS_ACCEPT_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify(buildTermsAcceptanceBody()),
       });
-      if (!signup.ok) {
-        const body = (await signup.json().catch(() => null)) as { message?: string } | null;
-        setError(body?.message ?? 'Não foi possível criar a conta.');
+      if (!termsRes.ok) {
+        const body = (await termsRes.json().catch(() => null)) as { message?: string } | null;
+        setError(body?.message ?? 'Não foi possível registrar o aceite dos termos.');
         return;
       }
 
-      // 2. Cria a organização (imobiliária) — trial de 14 dias automático
+      // 3. Cria a organização (imobiliária) — trial de 14 dias automático
       const orgRes = await fetch('/api/auth/organization/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,20 +120,27 @@ export default function CadastroPage() {
         }),
       });
       if (!orgRes.ok) {
-        setError('Conta criada, mas falhou ao registrar a imobiliária. Faça login e tente de novo.');
+        setError(
+          'Conta criada, mas falhou ao registrar a imobiliária. Faça login e tente de novo.',
+        );
         return;
       }
 
-      // 3. Define a org como ativa na sessão
+      // 4. Define a org como ativa na sessão
       const org = (await orgRes.json()) as { id?: string };
       if (org.id) {
-        await fetch('/api/auth/organization/set-active', {
+        const active = await fetch('/api/auth/organization/set-active', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ organizationId: org.id }),
         });
+        if (!active.ok) {
+          setError('Imobiliária criada. Faça login novamente para selecionar sua conta.');
+          return;
+        }
       }
 
+      sessionStorage.removeItem('imovi:org-draft');
       router.push('/auditoria');
     } catch {
       setError('Falha de rede. Tente novamente.');
@@ -96,6 +148,18 @@ export default function CadastroPage() {
       setLoading(false);
     }
   }
+
+  if (confirmation)
+    return (
+      <main style={{ padding: '3rem', background: C.bg, color: C.text, minHeight: '100vh' }}>
+        <h1>Confirme seu e-mail</h1>
+        <p>
+          Enviamos um link para {email}. Depois de confirmar, entre para concluir o cadastro da
+          imobiliária.
+        </p>
+        <Link href="/auditoria/login">Entrar ou reenviar confirmação</Link>
+      </main>
+    );
 
   return (
     <main
@@ -140,7 +204,9 @@ export default function CadastroPage() {
           }}
         >
           <div>
-            <label htmlFor="orgName" style={labelStyle}>Nome da imobiliária</label>
+            <label htmlFor="orgName" style={labelStyle}>
+              Nome da imobiliária
+            </label>
             <input
               id="orgName"
               required
@@ -150,36 +216,42 @@ export default function CadastroPage() {
               placeholder="Ex: Imobiliária Horizonte"
             />
           </div>
-          <div>
-            <label htmlFor="name" style={labelStyle}>Seu nome</label>
+          <div hidden={existingAccount}>
+            <label htmlFor="name" style={labelStyle}>
+              Seu nome
+            </label>
             <input
               id="name"
-              required
+              required={!existingAccount}
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               style={inputStyle}
             />
           </div>
-          <div>
-            <label htmlFor="email" style={labelStyle}>E-mail</label>
+          <div hidden={existingAccount}>
+            <label htmlFor="email" style={labelStyle}>
+              E-mail
+            </label>
             <input
               id="email"
               type="email"
-              required
+              required={!existingAccount}
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               style={inputStyle}
             />
           </div>
-          <div>
-            <label htmlFor="password" style={labelStyle}>Senha (mín. 8 caracteres)</label>
+          <div hidden={existingAccount}>
+            <label htmlFor="password" style={labelStyle}>
+              Senha (mín. 8 caracteres)
+            </label>
             <input
               id="password"
               type="password"
-              required
-              minLength={8}
+              required={!existingAccount}
+              minLength={existingAccount ? undefined : 8}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -187,21 +259,42 @@ export default function CadastroPage() {
             />
           </div>
 
-          <label style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start', color: C.text2, fontSize: '0.75rem', lineHeight: 1.5 }}>
-            <input type="checkbox" required style={{ marginTop: '0.2rem' }} />
+          <label
+            style={{
+              display: 'flex',
+              gap: '0.625rem',
+              alignItems: 'flex-start',
+              color: C.text2,
+              fontSize: '0.75rem',
+              lineHeight: 1.5,
+            }}
+          >
+            <input
+              type="checkbox"
+              required
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              style={{ marginTop: '0.2rem' }}
+            />
             <span>
-              Li e aceito os <Link href="/termos" target="_blank" style={{ color: C.accent }}>Termos de uso</Link>{' '}
-              e a <Link href="/privacidade" target="_blank" style={{ color: C.accent }}>Política de privacidade</Link>.
+              Li e aceito os{' '}
+              <Link href="/termos" target="_blank" style={{ color: C.accent }}>
+                Termos de uso
+              </Link>{' '}
+              e a{' '}
+              <Link href="/privacidade" target="_blank" style={{ color: C.accent }}>
+                Política de privacidade
+              </Link>{' '}
+              (versão de {formatVersionDate(TERMS_VERSION)} e de{' '}
+              {formatVersionDate(PRIVACY_VERSION)}). A data e a versão do aceite ficam registradas.
             </span>
           </label>
 
-          {error && (
-            <p style={{ color: C.negative, fontSize: '0.8125rem', margin: 0 }}>{error}</p>
-          )}
+          {error && <p style={{ color: C.negative, fontSize: '0.8125rem', margin: 0 }}>{error}</p>}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || checkingSession}
             style={{
               padding: '0.75rem',
               background: C.accent,
@@ -215,7 +308,13 @@ export default function CadastroPage() {
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? 'Criando conta…' : 'Começar trial grátis'}
+            {checkingSession
+              ? 'Carregando…'
+              : loading
+                ? 'Criando conta…'
+                : existingAccount
+                  ? 'Concluir cadastro da imobiliária'
+                  : 'Confirmar e-mail e começar'}
           </button>
 
           <p style={{ color: C.text2, fontSize: '0.8125rem', textAlign: 'center', margin: 0 }}>

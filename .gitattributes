@@ -1,0 +1,2 @@
+# db:migrate grava o sha256 de cada arquivo: mantenha LF em qualquer checkout.
+*.sql text eol=lf
