@@ -36,6 +36,10 @@ export default function PrivacidadePage() {
             'Armazenamos os parâmetros do imóvel e a estimativa para consulta por uma referência pública não sequencial. Qualquer pessoa com o link pode ver esses parâmetros e o resultado; não informe dados pessoais. Salvamos o e-mail da lista de espera somente após consentimento. Você pode solicitar sua remoção pelo contato no rodapé.',
           ],
           [
+            'Registro do aceite dos termos',
+            'Quando você aceita os Termos de uso e esta Política, guardamos o identificador da sua conta, a versão dos Termos de uso, a versão desta Política, a origem do aceite (cadastro da conta ou da imobiliária) e a data e hora do aceite. Usamos esse registro para comprovar o aceite e o contrato firmado com você. A base legal é a execução de contrato e o cumprimento de obrigação legal (LGPD, art. 7º, incisos V e II). Mantemos o registro enquanto a conta existir e, depois disso, pelo prazo prescricional aplicável. Quando os documentos mudam, um novo aceite é registrado e cada versão aceita fica preservada no histórico.',
+          ],
+          [
             'Dados técnicos',
             'Podemos registrar endereço IP, agente do navegador, eventos de segurança, falhas e métricas agregadas necessárias para proteger e operar o serviço.',
           ],

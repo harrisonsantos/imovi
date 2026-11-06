@@ -173,3 +173,35 @@ describe('POST /api/auditoria/termos', () => {
     expect(mocks.record).not.toHaveBeenCalled();
   });
 });
+
+describe('Política de privacidade cita o registro do aceite', () => {
+  const page = renderToStaticMarkup(createElement(PrivacidadePage))
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  it('tem nova versão, exibida na página', () => {
+    expect(PRIVACY_VERSION).toBe('2026-11-05');
+    expect(page).toContain('Última atualização: 5 de novembro de 2026');
+  });
+
+  it('descreve dados, finalidade, base legal, retenção e histórico por versão', () => {
+    const section = page.slice(page.indexOf('Registro do aceite dos termos'));
+    expect(page).toContain('Registro do aceite dos termos');
+    for (const fact of [
+      /identificador da sua conta/,
+      /versão dos Termos de uso/,
+      /versão desta Política/,
+      /origem do aceite/,
+      /data e hora/,
+      /comprovar/,
+      /execução de contrato/,
+      /cumprimento de obrigação legal/,
+      /art\. 7º, incisos V e II/,
+      /enquanto a conta existir/,
+      /prazo prescricional/,
+      /cada versão aceita/,
+    ]) {
+      expect(section).toMatch(fact);
+    }
+  });
+});
