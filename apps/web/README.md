@@ -81,16 +81,15 @@ rodaram na worktree Windows. Não houve deploy, push ou acesso a contas Cloudfla
 | `pnpm install --frozen-lockfile`                                               | PASS no Windows e Linux                                                                                          |
 | `pnpm lint`                                                                    | PASS, 14 tarefas; warnings preexistentes de directives não usadas                                                |
 | `pnpm typecheck`                                                               | PASS, 15 tarefas                                                                                                 |
-| `pnpm test`                                                                    | PASS, 15 tarefas, 453 testes; web 118                                                                            |
+| `pnpm test`                                                                    | PASS, 15 tarefas, 456 testes; web 121                                                                            |
 | `pnpm --filter @imovi/web cf:typegen --check`                                  | PASS                                                                                                             |
 | `pnpm turbo run build --filter=@imovi/web^...`                                 | PASS no container limpo                                                                                          |
-| `pnpm --filter @imovi/web build:cf`                                            | PASS Linux, 44 páginas geradas e Worker completo                                                                 |
-| `pnpm --filter @imovi/web exec wrangler deploy --dry-run`                      | PASS Linux, 143 assets; gzip 2309.69 KiB                                                                         |
-| Mesmo dry-run com `--env=preview`                                              | PASS Linux, R2 e SELF_REFERENCE isolados                                                                         |
+| `pnpm --filter @imovi/web build:cf`                                            | PASS Windows e Linux, 44 páginas geradas e Worker completo                                                       |
+| `pnpm --filter @imovi/web exec wrangler deploy --dry-run`                      | PASS Windows (145 assets; gzip 2324.62 KiB) e Linux (143 assets; gzip 2309.69 KiB)                               |
+| Mesmo dry-run com `--env=preview`                                              | PASS Windows e Linux, R2 e SELF_REFERENCE isolados                                                               |
 | `pnpm --filter @imovi/web preview --port 8788 --ip 0.0.0.0` + smoke HTTP local | PASS: home/assets/PNG 200, health 200, ready 503 sem DB/secrets, estimate 503 sem Turnstile                      |
 | `patches/`, `pnpm.patchedDependencies` e dependência `next-on-pages`           | PASS: removidos                                                                                                  |
-| Build nativo Windows                                                           | FAIL: Next standalone exige symlink e recebeu EPERM                                                              |
-| Dry-run no Windows após copiar output Linux                                    | FAIL: o output intermediário contém caminhos absolutos de WASM; executar build e dry-run no mesmo ambiente Linux |
+| Build nativo Windows (`scripts/build-cf.mjs` + `tests/build-cf.test.ts`)       | PASS: fallback `EPERM` para junctions relativas preservando standalone/OpenNext                                  |
 | `pnpm audit --prod --audit-level=high`                                         | FAIL: 3 críticas, 11 altas, 15 moderadas, 5 baixas                                                               |
 | Provedores reais, CI remoto, deploy e corte de domínio                         | NOT RUN; gates de staging permanecem                                                                             |
 

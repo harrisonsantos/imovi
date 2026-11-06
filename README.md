@@ -8,7 +8,7 @@ Referências iniciais dos seeds não são preços de transações. Medianas obse
 
 Requer Node 22, pnpm 9.15.9 e uv/Python 3.13. No PowerShell, use `pnpm.cmd` se a política bloquear scripts.
 O build Cloudflare usa `@opennextjs/cloudflare`; não depende do builder Vercel nem dos patches do antigo adaptador Pages.
-Execute `build:cf`, preview e dry-run em Linux/WSL2 funcional (o CI usa Ubuntu). No Windows sem permissão de symlink, o Next standalone falha com `EPERM`; não há patch local nem alteração de permissões do sistema. A T2 foi validada em Docker Linux, conforme [evidência do web](apps/web/README.md#evidência-local-t2).
+`apps/web/scripts/build-cf.mjs` executa `opennextjs-cloudflare build` e aplica no Windows (quando não há permissão de symlink) fallback para junctions relativas no standalone/OpenNext, permitindo rodar `build:cf` e `wrangler deploy --dry-run` tanto em Windows quanto em Linux (ver [evidência do web](apps/web/README.md#evidência-local-t2)).
 
 ```sh
 pnpm install --frozen-lockfile
