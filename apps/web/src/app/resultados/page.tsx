@@ -7,7 +7,6 @@ import { publicEstimateOf, sourceDescription } from '@/lib/public-estimate';
 import { Nav } from '@/components/Nav';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 const brl = (value: number) =>
   value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const propertyLabels = {

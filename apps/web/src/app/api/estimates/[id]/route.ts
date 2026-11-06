@@ -5,7 +5,6 @@ import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 import { publicEstimateOf } from '@/lib/public-estimate';
 
-export const runtime = 'edge';
 
 export async function GET(
   _req: Request,

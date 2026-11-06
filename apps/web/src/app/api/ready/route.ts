@@ -2,7 +2,6 @@ import { sql } from '@imovi/db/operators';
 import { getCfEnv } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 
-export const runtime = 'edge';
 
 /** Readiness is distinct from /api/health liveness; no secrets in response. */
 export async function GET(): Promise<Response> {

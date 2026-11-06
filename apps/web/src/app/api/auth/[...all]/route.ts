@@ -6,7 +6,6 @@ import { apiError } from '@/lib/errors';
 import { getCfEnv } from '@/lib/cf-env';
 import { AuthConfigurationError, getAuth } from '@/lib/auth';
 
-export const runtime = 'edge';
 
 async function handler(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();

@@ -1,14 +1,14 @@
 /**
- * Acesso ao env do Cloudflare Pages dentro das rotas edge.
+ * Acesso aos bindings do Worker OpenNext no contexto da requisição.
  * Fora do runtime CF (dev puro/testes) usa process.env.
  */
 export async function getCfEnv(): Promise<Record<string, string>> {
   const runtimeEnv = process.env as Record<string, string>;
   try {
-    const { getRequestContext } = await import('@cloudflare/next-on-pages');
+    const { getCloudflareContext } = await import('@opennextjs/cloudflare');
     return {
       ...runtimeEnv,
-      ...(getRequestContext().env as Record<string, string>),
+      ...(getCloudflareContext().env as unknown as Record<string, string>),
     };
   } catch {
     return runtimeEnv;

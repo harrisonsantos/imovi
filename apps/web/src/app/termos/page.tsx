@@ -3,7 +3,6 @@ import { Footer } from '@/components/Footer';
 import { Nav } from '@/components/Nav';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 export const metadata: Metadata = {
   title: 'Termos de uso',
   description: 'Condições de uso das estimativas, contas, trials e assinaturas do imovi.',

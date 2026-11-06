@@ -9,7 +9,6 @@ import { sql } from '@imovi/db/operators';
 import { getCfEnv } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 
-export const runtime = 'edge';
 
 export async function GET(): Promise<Response> {
   const ts = new Date().toISOString();

@@ -13,7 +13,6 @@ import { apiError } from '@/lib/errors';
 import { buildMatriculaKey, validateMatriculaFile } from '@/lib/matricula';
 import { requireOrg, sessionGuard } from '@/lib/session';
 
-export const runtime = 'edge';
 
 const ImovelIdSchema = z.string().uuid();
 

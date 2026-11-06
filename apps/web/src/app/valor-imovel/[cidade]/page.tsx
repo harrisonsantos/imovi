@@ -7,7 +7,6 @@ import { getSeoCity } from '@/lib/seo-data';
 import { SITE_URL } from '@/lib/seo';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 type Props = { params: Promise<{ cidade: string }> };

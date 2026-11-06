@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
 
-export const runtime = 'edge';
 
 /**
  * Mantém o crawl concentrado nas páginas públicas com valor de busca.

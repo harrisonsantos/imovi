@@ -6,7 +6,6 @@ import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 
 const AUDIT_PLANS = [
   { id: 'audit-essencial', name: 'Essencial', price: 149, limit: 'Até 5 corretores' },

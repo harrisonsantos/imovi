@@ -9,7 +9,6 @@ import {
   requiresProductionProtection,
 } from '@/lib/estimate-protection';
 
-export const runtime = 'edge';
 const Schema = z.object({
   email: z
     .string()

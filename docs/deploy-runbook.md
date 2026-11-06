@@ -4,9 +4,9 @@ Este runbook acompanha a spec `docs/specs/stabilization/spec.md`. Os comandos qu
 
 ## Ambientes e provedores
 
-- **Neon:** branch/banco isolado de staging com PostGIS e pgvector conforme migrations; `DATABASE_URL` como secret em Pages e Worker. Não reutilizar a URL de produção no preview.
-- **Cloudflare Pages:** projeto `imovi-web`, branch `preview`, binding `NEXT_PUBLIC_APP_ENV=preview`; `IPTU_CACHE`, `MODEL_ARTIFACTS`, `MATRICULAS` devem apontar para recursos de preview declarados em `apps/web/wrangler.toml`.
-- **Worker:** `--env=preview`, buckets separados e crons desativados; execute jobs de staging manualmente. A ausência de `--env` seleciona produção, nunca implicitamente em ensaios.
+- **Neon:** branch/banco isolado de staging com PostGIS e pgvector conforme migrations; `DATABASE_URL` como secret em ambos os Workers (web e jobs). Não reutilizar a URL de produção no preview.
+- **Web/OpenNext:** Worker `imovi-web` em produção e `imovi-web-preview` com `--env=preview`; `NEXT_PUBLIC_APP_ENV=preview` no build e no runtime de preview. `MODEL_ARTIFACTS` e `MATRICULAS` apontam para os buckets de preview declarados em `apps/web/wrangler.toml`. O binding `ASSETS` serve `.open-next/assets`; o entrypoint é `.open-next/worker.js`.
+- **Worker de jobs:** `--env=preview`, buckets separados e crons desativados; execute jobs de staging manualmente. `IPTU_CACHE` permanece apenas aqui: não há consumidor de KV em `apps/web`. A ausência de `--env` seleciona produção, nunca implicitamente em ensaios.
 - **R2:** provisionar `html-snapshots-preview`, `imovi-model-artifacts-preview`, `imovi-matriculas-preview` antes do deploy de preview. IDs KV devem ser conferidos na conta autorizada. Configuração no arquivo não prova existência do recurso.
 - **Auth:** `BETTER_AUTH_SECRET` aleatório >=32 caracteres, `BETTER_AUTH_URL` HTTPS correspondente ao ambiente. Remetente `EMAIL_FROM` verificado e `RESEND_API_KEY`; prod/preview exigem verificação de e-mail e falham fechados na ausência dessa configuração.
 - **Turnstile:** site key público embutido no build para o hostname correto, `TURNSTILE_SECRET` privado como binding. Ausência em produção/preview retorna indisponibilidade; token inválido é recusado. IP confiável vem do Cloudflare. `ESTIMATE_RATE_LIMIT_PER_MINUTE` padrão10, entre1 e1000; contador SQL compartilhado, IP somente em hash.
@@ -14,11 +14,11 @@ Este runbook acompanha a spec `docs/specs/stabilization/spec.md`. Os comandos qu
 - **Vista/IPTU:** `VISTA_KEY_SECRET` aleatório para cifrar chaves; credenciais Vista pertencem à organização. InfoSimples é opcional/pago; a CLI ainda não injeta o adapter (`infoSimples: undefined`). A variável de referência `INFOSIMPLES_TOKEN` sozinha não o ativa: integração e validação de cobertura ficam pendentes. Scraping utiliza allowlist e limites por fonte; não remova políticas para passar um check.
 - **GitHub:** environments `preview`, `production`, `model-training` com secrets mínimos; proteção/revisor obrigatório em production. Variáveis `WEB_URL`, `WORKER_URL` em cada environment apontam ao ambiente respectivo. R2/retraining deve usar bucket isolado até promoção aprovada.
 
-A lista de referência está em `.env.example`. Wranglers, console Pages e build têm escopos distintos: variáveis públicas de build não substituem bindings secretos de runtime.
+A lista de referência está em `.env.example`. Os dois Workers e cada ambiente têm escopos distintos: variáveis públicas de build não substituem bindings secretos de runtime. Secrets do projeto Pages não migram automaticamente para o Worker web.
 
 ## Backup e migrations
 
-1. Registrar SHA do app, versões do Worker/Pages, schema atual, counts e ativo de modelo. Criar backup/snapshot restaurável; registrar identificador fora do código. Demonstrar restauração numa branch isolada.
+1. Registrar SHA do app, versões dos Workers web/jobs (e Pages anterior durante a transição), schema atual, counts e ativo de modelo. Criar backup/snapshot restaurável; registrar identificador fora do código. Demonstrar restauração numa branch isolada.
 2. Verificar duplicatas com `SELECT listing_id, captured_at, count(*) FROM listing_snapshots GROUP BY 1,2 HAVING count(*) > 1`. Se houver, parar e investigar; não apagar histórico automaticamente.
 3. Fazer preflight das migrations0001–0007 e do ledger `schema_migrations`. Instalações legadas sem ledger precisam conferir que migrations antigas são compatíveis com o schema real; não presumir que um banco já está atualizado.
 4. Em staging autorizado, configurar `DATABASE_URL` apenas no terminal seguro e executar `pnpm --filter @imovi/db db:migrate`. Cada migration e checksum têm uma transação; rerun pula arquivos registrados. Checksum alterado é erro. Não executar duas migrations simultaneamente.
@@ -40,9 +40,22 @@ Registrar evidência por critério da spec, sem segredos/PII nos logs:
 
 ## Checks e publicação
 
-CI executa `checks.yml`: frozen install, lint, tipos, testes sequenciais, auditoria critical/high, Python, build Pages e bundle Worker. Não publica em push. Deploy é `workflow_dispatch` com SHA completo; repete checks para esse SHA, passa pelo environment e executa smoke somente depois da publicação.
+CI executa `checks.yml`: frozen install, lint, tipos, testes sequenciais, auditoria critical/high, Python, build OpenNext e dry-run do bundle web em produção/preview, além do bundle do Worker de jobs. Não publica em push. Deploy é `workflow_dispatch` com SHA completo; repete checks para esse SHA, passa pelo environment e executa smoke somente depois da publicação. O passo web usa `build:cf` e `opennextjs-cloudflare deploy`, ambos com `--env=preview` no preview; produção usa o ambiente padrão.
 
 Preview exige infraestrutura provisionada e migrations aplicadas antes de `/ready` ou smoke. Produção exige SHA atual de main, `confirm_production=true` e aprovação de environment. Smoke local: configurar `WEB_URL`, `WORKER_URL` e `node scripts/smoke.mjs`; é somente leitura (health/readiness/cidades), não substitui a jornada autenticada e sandbox.
+
+## Transição de Pages para OpenNext
+
+A migração T2 substitui `@cloudflare/next-on-pages` e remove os patches Vercel. As rotas HTTP continuam no Worker Cloudflare, com runtime Next.js Node compatível com OpenNext; `/api/health` e `/api/ready` mantêm os contratos. O [guia OpenNext](https://opennext.js.org/cloudflare/get-started) descreve os artefatos e a [CLI](https://opennext.js.org/cloudflare/cli) define os comandos de build/publicação. Dry-run local não publica nem valida provedores reais.
+
+Antes de qualquer publicação autorizada:
+
+1. Provisionar/verificar recursos isolados e configurar secrets no `imovi-web-preview`, incluindo DB, auth/e-mail, Turnstile e Stripe sandbox. Confirmar `MODEL_ARTIFACTS`, `MATRICULAS` e a referência ao próprio Worker no ambiente correto. Não copiar credenciais de produção. Tokens de CI precisam das permissões de Workers e dos recursos utilizados; permissões antigas de Pages não bastam.
+2. Executar o workflow no SHA candidato em preview. Ajustar `WEB_URL` ao hostname do Worker, `BETTER_AUTH_URL` e os hostnames autorizados de Turnstile. Validar assets, páginas antes servidas como edge, redirects, cookies/sessões, uploads/downloads R2, auth/e-mail e o ciclo Stripe sandbox descrito acima. Confirmar health/readiness e indisponibilidade/recuperação de dependências.
+3. Registrar versões, smoke, jornadas e rollback em staging. Não remover o projeto Pages nem alterar o domínio de produção nesta tarefa. Manter o deployment Pages anterior disponível até o corte autorizado e registrar a configuração anterior de DNS/rotas; não presumir que um Worker com o mesmo nome receba automaticamente o domínio Pages.
+4. Após G1–G3 e G7 do plano unificado, publicar o mesmo SHA validado e executar o corte de domínio como operação separada e autorizada. Em falha, restaurar a rota/domínio para Pages anterior; após a transição, retornar à versão anterior do Worker validada. Rollback de código/rota não restaura DB, R2 ou secrets: manter compatibilidade de dados e demonstrar a recuperação separadamente.
+
+**Decisão sobre `first-deploy.ps1`:** o script de `eaec4bf` (`claude/distracted-mcclintock`) não é incorporado. Ele publica Pages, fixa uma conta no código, continua após falha de provisionamento R2 e só configura `DATABASE_URL` depois do deploy, anunciando sucesso mesmo se essa configuração falhar. Adaptá-lo duplicaria o fluxo manual por SHA e seus gates. O caminho suportado é provisionamento/secrets prévios no ambiente autorizado e `deploy.yml`; nenhum deploy ou chamada a conta real faz parte da verificação local T2.
 
 ## Recuperação de cobrança e modelo
 
@@ -52,4 +65,4 @@ O modelo é publicado em `versions/<versao>/` antes da ativação em banco; `cur
 
 ## Pendências de liberação
 
-Backup/restauração, banco real, provedores, sandbox e rollback externo devem constar nas evidências. Status local PASS não significa produção pronta. Migração do adaptador Cloudflare, ativação ML e ampliação comercial são etapas posteriores, cada uma com aceite próprio.
+Backup/restauração, banco real, provedores, sandbox, corte de domínio e rollback externo devem constar nas evidências. Status local PASS não significa produção pronta. A migração do adaptador ainda depende de aceite em preview e do corte autorizado; ativação ML e ampliação comercial têm aceite próprio.

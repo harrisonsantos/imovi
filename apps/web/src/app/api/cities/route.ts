@@ -9,7 +9,6 @@ import { getCfEnv } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 
-export const runtime = 'edge';
 
 export async function GET(): Promise<Response> {
   let db;
