@@ -20,12 +20,67 @@ A lista de referência está em `.env.example`. Os dois Workers e cada ambiente 
 
 1. Registrar SHA do app, versões dos Workers web/jobs (e Pages anterior durante a transição), schema atual, counts e ativo de modelo. Criar backup/snapshot restaurável; registrar identificador fora do código. Demonstrar restauração numa branch isolada.
 2. Verificar duplicatas com `SELECT listing_id, captured_at, count(*) FROM listing_snapshots GROUP BY 1,2 HAVING count(*) > 1`. Se houver, parar e investigar; não apagar histórico automaticamente.
-3. Fazer preflight das migrations0001–0007 e do ledger `schema_migrations`. Instalações legadas sem ledger precisam conferir que migrations antigas são compatíveis com o schema real; não presumir que um banco já está atualizado.
+3. Fazer preflight das migrations `0001`–`0008` e do ledger `schema_migrations`. Instalações legadas sem ledger precisam conferir que migrations antigas são compatíveis com o schema real; não presumir que um banco já está atualizado.
 4. Em staging autorizado, configurar `DATABASE_URL` apenas no terminal seguro e executar `pnpm --filter @imovi/db db:migrate`. Cada migration e checksum têm uma transação; rerun pula arquivos registrados. Checksum alterado é erro. Não executar duas migrations simultaneamente.
 5. Confirmar tabelas/colunas/índices, snapshots com associações conhecidas e significado dos eventos antigos. Backfill preserva somente a última observação conhecida; snapshots antigos sem associação confiável ficam excluídos do ML.
 6. Fazer backfill de medianas em staging pelo comando `aggregate-neighborhoods` da CLI. Seeds são referências iniciais e não sobrescrevem medianas observadas.
 
 Rollback de app preserva migrations aditivas e dados novos. Reversão de schema exige decisão própria e backup, sem `DROP` automático.
+
+### Preflight do Gate G1 (reconciliação de `imovi-prod` sem `schema_migrations`)
+
+O banco de produção Neon (`imovi-prod`) teve apenas `0001_initial.sql` e `0002_cities.sql` aplicadas manualmente no passado e **não possui** a tabela `schema_migrations`. Como `0001` e `0002` utilizam exclusivamente DDL idempotente (`CREATE EXTENSION/TABLE/INDEX IF NOT EXISTS`), o runner `packages/db/src/migrate.ts` cria `schema_migrations`, reexecuta `0001` e `0002` sem alterar dados existentes, aplica `0003` a `0008` em transações individuais e registra o checksum SHA-256 (normalizado em LF) das 8 versões.
+
+Antes de apontar produção (Gate G7), execute obrigatoriamente este roteiro em uma branch isolada de staging no Neon:
+
+1. **Criar branch de staging no Neon a partir de `imovi-prod`:**
+   - No console do Neon (ou via `neonctl branches create --name staging-g1 --parent imovi-prod`), criar uma branch copy-on-write a partir da branch de produção `imovi-prod`.
+   - Copiar a connection string de `staging-g1` para uma variável de sessão temporária (`DATABASE_URL`), garantindo que o host pertença ao endpoint de staging e nunca ao de produção.
+2. **Inspecionar o estado legado e checar duplicatas antes de migrar:**
+   - Confirmar a ausência inicial do ledger e as contagens de linha atuais:
+     ```sql
+     SELECT to_regclass('public.schema_migrations') AS schema_migrations_table;
+     SELECT
+       (SELECT count(*) FROM neighborhoods) AS neighborhoods,
+       (SELECT count(*) FROM properties) AS properties,
+       (SELECT count(*) FROM listings) AS listings,
+       (SELECT count(*) FROM listing_snapshots) AS snapshots,
+       (SELECT count(*) FROM cities) AS cities;
+     ```
+   - Verificar se existem duplicatas em `listing_snapshots` que bloqueariam o índice único `listing_snapshots_listing_captured_ux` da `0007_stabilization.sql` (`SQLSTATE 23505`):
+     ```sql
+     SELECT listing_id, captured_at, count(*)
+     FROM listing_snapshots
+     GROUP BY 1, 2
+     HAVING count(*) > 1;
+     ```
+     Se retornar qualquer linha, **parar imediatamente** e investigar antes de prosseguir.
+3. **Executar e reexecutar `db:migrate` contra a branch de staging:**
+   - Aplicar a reconciliação (`0001`..`0002`) e as novas migrations (`0003`..`0008`):
+     ```powershell
+     $env:DATABASE_URL="postgresql://<user>:<pass>@<ep-staging>.neon.tech/<db>?sslmode=require"
+     pnpm --filter @imovi/db db:migrate
+     ```
+   - Executar uma segunda vez consecutiva para comprovar idempotência (`[db:migrate] já aplicada ...` de `0001_initial.sql` até `0008_terms_acceptance.sql`):
+     ```powershell
+     pnpm --filter @imovi/db db:migrate
+     ```
+4. **Validar `schema_migrations` e o schema reconciliado:**
+   - Confirmar que as 8 versões (`0001_initial.sql` a `0008_terms_acceptance.sql`) estão registradas com checksum SHA-256 de 64 caracteres hexadecimais:
+     ```sql
+     SELECT name, checksum, applied_at
+     FROM schema_migrations
+     ORDER BY name;
+     ```
+   - Confirmar que as contagens de `neighborhoods`, `properties`, `listings` e `cities` foram preservadas, que `listing_snapshots` recebeu o backfill de `property_id`/`operation` da última observação conhecida e que as tabelas de `0003`–`0008` (`users`, `organizations`, `members`, `audit_corretores`, `audit_imoveis`, `audit_leads`, `audit_negocios`, `audit_anomalias`, `audit_eventos`, `org_vista_config`, `audit_matriculas`, `billing_events`, `waitlist_contacts`, `api_rate_limits`, `terms_acceptances`) existem.
+5. **Smoke-check antes de apontar produção:**
+   - Configurar a `DATABASE_URL` de `staging-g1` nos Workers de preview (`imovi-web-preview` e worker de jobs `--env=preview`) e executar o smoke-check somente leitura:
+     ```powershell
+     $env:WEB_URL="https://<imovi-web-preview-url>"
+     $env:WORKER_URL="https://<imovi-worker-preview-url>"
+     node scripts/smoke.mjs
+     ```
+   - Somente após `/api/health`, `/api/ready` e listagem de cidades passarem em staging e o snapshot/backup de `imovi-prod` estar registrado é permitido executar `pnpm --filter @imovi/db db:migrate` em produção (Gate G7).
 
 ## Aceite funcional em staging
 
