@@ -7,7 +7,7 @@
  * versão nova sem apagar as anteriores. Módulo seguro para o cliente.
  */
 export const TERMS_VERSION = '2026-07-10';
-export const PRIVACY_VERSION = '2026-11-05';
+export const PRIVACY_VERSION = '2026-11-11';
 
 const MONTHS = [
   'janeiro',

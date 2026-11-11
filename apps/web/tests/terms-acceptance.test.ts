@@ -180,8 +180,13 @@ describe('Política de privacidade cita o registro do aceite', () => {
     .replace(/\s+/g, ' ');
 
   it('tem nova versão, exibida na página', () => {
-    expect(PRIVACY_VERSION).toBe('2026-11-05');
-    expect(page).toContain('Última atualização: 5 de novembro de 2026');
+    expect(PRIVACY_VERSION).toBe('2026-11-11');
+    expect(page).toContain('Última atualização: 11 de novembro de 2026');
+  });
+
+  it('explica exclusão por anonimização e retenção do aceite', () => {
+    expect(page).toMatch(/exclusão da conta.*anonimização dos dados cadastrais/);
+    expect(page).toMatch(/apenas o registro de aceite.*prazo prescricional legal/);
   });
 
   it('descreve dados, finalidade, base legal, retenção e histórico por versão', () => {
