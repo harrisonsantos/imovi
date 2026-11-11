@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 
 import type { NormalizedListing, RawListing, ListingSource } from '@imovi/shared';
 
+import { parseRobotsTxt } from '@imovi/scrapers';
 import { runScrape, listingKey, type RunScrapeDeps } from '../src/pipeline/run-scrape.js';
+import { buildScraper } from '../src/commands/scrape.js';
 import { silentLogger } from '../src/logger.js';
 
 /** Helpers de factory para testes — reduzem ruído nas asserts. */
@@ -226,5 +228,142 @@ describe('runScrape', () => {
 
     expect(result.scraped).toBe(3);
     expect(result.normalized).toBe(3);
+  });
+
+  it.each([
+    {
+      reason: 'robots_disallowed',
+      url: 'https://www.zapimoveis.com.br/venda/imoveis/pr+curitiba/?pagina=1',
+    },
+    {
+      reason: 'http_status_403',
+      url: 'https://www.vivareal.com.br/venda/parana/curitiba/?pagina=1',
+    },
+    {
+      reason: 'http_status_429',
+      url: 'https://www.olx.com.br/imoveis/venda/estado-pr/cidade-curitiba?o=1',
+    },
+    {
+      reason: 'parser_zero_items',
+      url: 'https://www.zapimoveis.com.br/venda/imoveis/pr+curitiba/?pagina=1',
+    },
+  ])(
+    'preserva url real e motivo específico ($reason) quando scraper lança erro diagnóstico',
+    async ({ reason, url }) => {
+      const record = vi.fn(async () => {});
+      const err = Object.assign(new Error(reason), { reason, url, page: 1 });
+
+      const deps = makeDeps({
+        sources: ['zap'],
+        scrapers: {
+          zap: async function* () {
+            yield* [];
+            throw err;
+          },
+        },
+        repos: {
+          listings: { upsertBatch: vi.fn(async () => 1) },
+          properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
+          errors: { record },
+        },
+      });
+
+      const result = await runScrape(deps);
+
+      expect(result.errors).toBe(1);
+      expect(record).toHaveBeenCalledWith(
+        deps.db,
+        expect.objectContaining({
+          source: 'zap',
+          message: reason,
+          url,
+        }),
+      );
+    },
+  );
+
+  it('preserva url real e motivo específico via ctx.onDiagnostic quando source retorna 0 itens sem lançar', async () => {
+    const record = vi.fn(async () => {});
+    const targetUrl = 'https://www.olx.com.br/imoveis/venda/estado-pr/cidade-curitiba?o=1';
+
+    const deps = makeDeps({
+      sources: ['olx'],
+      scrapers: {
+        olx: async function* (ctx) {
+          ctx.onDiagnostic?.({ reason: 'parser_zero_items', url: targetUrl });
+          yield* [];
+        },
+      },
+      repos: {
+        listings: { upsertBatch: vi.fn(async () => 1) },
+        properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
+        errors: { record },
+      },
+    });
+
+    const result = await runScrape(deps);
+
+    expect(result.errors).toBe(1);
+    expect(record).toHaveBeenCalledWith(
+      deps.db,
+      expect.objectContaining({
+        source: 'olx',
+        message: 'parser_zero_items',
+        url: targetUrl,
+      }),
+    );
+  });
+
+  it('integra buildScraper dos 3 portais com runScrape registrando url e motivo específico', async () => {
+    const record = vi.fn(async () => {});
+    const disallowAll = parseRobotsTxt('User-agent: *\nDisallow: /');
+    const policies = {
+      zap: disallowAll,
+      vivareal: disallowAll,
+      olx: disallowAll,
+    };
+
+    const deps = makeDeps({
+      sources: ['zap', 'vivareal', 'olx'],
+      scrapers: {
+        zap: buildScraper('zap', 'pr+curitiba', 1, policies),
+        vivareal: buildScraper('vivareal', 'parana/curitiba', 1, policies),
+        olx: buildScraper('olx', 'pr/cidade-curitiba', 1, policies),
+      },
+      repos: {
+        listings: { upsertBatch: vi.fn(async () => 1) },
+        properties: { upsertFromListing: vi.fn(async () => ({ id: 'test-prop-id' })) },
+        errors: { record },
+      },
+    });
+
+    const result = await runScrape(deps);
+
+    expect(result.errors).toBe(3);
+    expect(record).toHaveBeenCalledTimes(3);
+    expect(record).toHaveBeenCalledWith(
+      deps.db,
+      expect.objectContaining({
+        source: 'zap',
+        message: 'robots_disallowed',
+        url: 'https://www.zapimoveis.com.br/venda/imoveis/pr+curitiba/?pagina=1',
+      }),
+    );
+    expect(record).toHaveBeenCalledWith(
+      deps.db,
+      expect.objectContaining({
+        source: 'vivareal',
+        message: 'robots_disallowed',
+        url: 'https://www.vivareal.com.br/venda/parana/curitiba/?pagina=1',
+      }),
+    );
+    expect(record).toHaveBeenCalledWith(
+      deps.db,
+      expect.objectContaining({
+        source: 'olx',
+        message: 'robots_disallowed',
+        url: 'https://www.olx.com.br/imoveis/venda/estado-pr/cidade-curitiba?o=1',
+      }),
+    );
   });
 });

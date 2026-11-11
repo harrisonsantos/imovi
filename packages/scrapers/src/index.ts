@@ -7,7 +7,12 @@ export { parseOlxListingPage } from './olx/parser.js';
 export { RateLimiter } from './core/rate-limiter.js';
 export { Fetcher, type FetcherOptions } from './core/fetcher.js';
 export { ProxyRotator } from './core/proxy-rotator.js';
-export type { ScrapeOptions } from './core/types.js';
+export {
+  ScrapeDiagnosticError,
+  type ScrapeDiagnostic,
+  type ScrapeFailureReason,
+  type ScrapeOptions,
+} from './core/types.js';
 export type { ParseContext } from './zap/parser.js';
 export {
   parseRobotsTxt,

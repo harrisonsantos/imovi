@@ -19,11 +19,28 @@ export interface PropertyRepo {
   upsertFromListing(db: DbClient, listing: NormalizedListing): Promise<{ id: string }>;
 }
 
-export interface ScrapeErrorRepo {
-  record(db: DbClient, err: { source: ListingSource; message: string; at: Date }): Promise<void>;
+export interface ScrapeErrorRecord {
+  source: ListingSource;
+  message: string;
+  url?: string | null;
+  at: Date;
 }
 
-export type ScraperFn = (ctx: { logger: Logger }) => AsyncGenerator<RawListing, void, void>;
+export interface ScrapeErrorRepo {
+  record(db: DbClient, err: ScrapeErrorRecord): Promise<void>;
+}
+
+export interface ScraperDiagnosticInput {
+  reason: string;
+  url?: string | null;
+}
+
+export interface ScraperContext {
+  logger: Logger;
+  onDiagnostic?: (diag: ScraperDiagnosticInput) => void;
+}
+
+export type ScraperFn = (ctx: ScraperContext) => AsyncGenerator<RawListing, void, void>;
 
 export interface RunScrapeDeps {
   sources: ListingSource[];
@@ -89,10 +106,16 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
     }
 
     let countThisSource = 0;
+    let lastDiagnostic: ScraperDiagnosticInput | undefined;
 
     try {
       logger.info('scrape_source_start', { source });
-      const gen = scraper({ logger });
+      const gen = scraper({
+        logger,
+        onDiagnostic: (diag) => {
+          lastDiagnostic = diag;
+        },
+      });
       for await (const raw of gen) {
         result.scraped += 1;
         countThisSource += 1;
@@ -114,16 +137,29 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
           break;
         }
       }
-      if (countThisSource === 0) throw new Error('scraper_empty_result');
+      if (countThisSource === 0) {
+        const emptyReason = lastDiagnostic?.reason ?? 'scraper_empty_result';
+        throw Object.assign(new Error(emptyReason), {
+          url: lastDiagnostic?.url ?? null,
+        });
+      }
       logger.info('scrape_source_done', { source, count: countThisSource });
     } catch (err) {
       result.errors += 1;
       const message = err instanceof Error ? err.message : String(err);
-      logger.error('scrape_source_failed', { source, error: message });
+      const errUrl =
+        err &&
+        typeof err === 'object' &&
+        'url' in err &&
+        typeof (err as { url?: unknown }).url === 'string'
+          ? (err as { url: string }).url
+          : (lastDiagnostic?.url ?? null);
+      logger.error('scrape_source_failed', { source, error: message, url: errUrl });
       try {
         await repos.errors.record(db, {
           source,
           message,
+          url: errUrl,
           at: new Date(),
         });
       } catch (recordErr) {

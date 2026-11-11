@@ -119,10 +119,11 @@ function makePropertyRepoAdapter(
   };
 }
 
-const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
+export const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
   async record(db, err) {
     await scrapeErrorRepo.record(db as DbClient, {
       source: err.source,
+      url: err.url ?? null,
       error: err.message,
       occurredAt: err.at,
     });
@@ -133,21 +134,24 @@ const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
  * Mapeia ListingSource → factory de AsyncIterable<RawListing>, aplicando
  * `maxPages` e a policy de robots.txt previamente carregada.
  */
-function buildScraper(
+export function buildScraper(
   source: ListingSource,
   location: string,
   maxPages: number,
   policyBySource: Record<ListingSource, RobotsPolicy>,
 ): ScraperFn {
   const policy = policyBySource[source];
-  const opts = {
-    location,
-    operation: 'sale',
-    maxPages,
-    robotsPolicy: policy,
-  } as const;
 
-  return async function* (): AsyncGenerator<RawListing, void, void> {
+  return async function* (ctx): AsyncGenerator<RawListing, void, void> {
+    const opts = {
+      location,
+      operation: 'sale',
+      maxPages,
+      robotsPolicy: policy,
+      onDiagnostic: (diag: { reason: string; url: string }) => {
+        ctx?.onDiagnostic?.({ reason: diag.reason, url: diag.url });
+      },
+    } as const;
     const iterable =
       source === 'zap'
         ? scrapeZap(opts)
