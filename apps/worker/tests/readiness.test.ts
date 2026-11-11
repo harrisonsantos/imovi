@@ -31,7 +31,9 @@ describe('Worker health and scheduled failures', () => {
   });
   it('readiness requires a successful database query', async () => {
     mocks.execute.mockResolvedValue([]);
-    expect((await worker.fetch(new Request('https://worker.test/ready'), env)).status).toBe(200);
+    const response = await worker.fetch(new Request('https://worker.test/ready'), env);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'ready', checks: { db: 'ok' } });
     expect(mocks.execute).toHaveBeenCalledOnce();
   });
   it('failed scrape remains a rejected scheduled task', async () => {

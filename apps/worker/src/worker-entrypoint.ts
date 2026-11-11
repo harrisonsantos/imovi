@@ -112,7 +112,7 @@ export default {
     if (url.pathname === '/ready') {
       try {
         await createDbClient({ connectionString: env.DATABASE_URL }).execute(sql`SELECT 1`);
-        return Response.json({ status: 'ok', db: 'ok' });
+        return Response.json({ status: 'ready', checks: { db: 'ok' } });
       } catch {
         return Response.json({ status: 'unavailable', db: 'unavailable' }, { status: 503 });
       }

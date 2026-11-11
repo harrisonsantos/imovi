@@ -13,8 +13,18 @@ export const MATRICULA_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
 export type MatriculaFileValidation = { ok: true } | { ok: false; error: string };
 
-/** Valida tipo e tamanho do arquivo de matrícula (limites do produto). */
-export function validateMatriculaFile(mime: string, size: number): MatriculaFileValidation {
+const SIGNATURES: Record<string, readonly number[]> = {
+  'application/pdf': [0x25, 0x50, 0x44, 0x46, 0x2d],
+  'image/jpeg': [0xff, 0xd8, 0xff],
+  'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+};
+
+/** Pré-valida metadados antes da leitura; com bytes, confere também a assinatura. */
+export function validateMatriculaFile(
+  mime: string,
+  size: number,
+  bytes?: Uint8Array,
+): MatriculaFileValidation {
   if (!(MATRICULA_ALLOWED_MIMES as readonly string[]).includes(mime)) {
     return { ok: false, error: 'Apenas arquivos PDF, JPEG e PNG são permitidos.' };
   }
@@ -23,6 +33,12 @@ export function validateMatriculaFile(mime: string, size: number): MatriculaFile
   }
   if (size > MATRICULA_MAX_SIZE_BYTES) {
     return { ok: false, error: 'Arquivo muito grande. Máximo: 10MB.' };
+  }
+  if (bytes && !SIGNATURES[mime]!.every((byte, index) => bytes[index] === byte)) {
+    return {
+      ok: false,
+      error: 'Conteúdo do arquivo não corresponde ao tipo PDF, JPEG ou PNG informado.',
+    };
   }
   return { ok: true };
 }

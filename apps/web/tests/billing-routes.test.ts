@@ -296,6 +296,7 @@ describe('durable checkout attempts', () => {
   const request = (planId = 'audit-essencial') =>
     new Request('https://imovi.test/api/billing/checkout', {
       method: 'POST',
+      headers: { origin: 'https://imovi.test' },
       body: JSON.stringify({ planId }),
     });
   const freshOrg = () => ({
@@ -502,7 +503,11 @@ describe('billing administrative routes', () => {
       expect(
         (
           await checkout(
-            new Request('https://imovi.test/api/billing/checkout', { method: 'POST', body }),
+            new Request('https://imovi.test/api/billing/checkout', {
+              method: 'POST',
+              headers: { origin: 'https://imovi.test' },
+              body,
+            }),
           )
         ).status,
       ).toBe(400);
@@ -517,6 +522,7 @@ describe('billing administrative routes', () => {
     const request = () =>
       new Request('https://imovi.test/api/billing', {
         method: 'POST',
+        headers: { origin: 'https://imovi.test' },
         body: JSON.stringify({ planId: 'audit-essencial' }),
       });
     expect((await checkout(request())).status).toBe(403);
@@ -537,7 +543,11 @@ describe('administrative audit configuration', () => {
     expect(
       (
         await configPut(
-          new Request('https://imovi.test/api/auditoria/config', { method: 'PUT', body: '{}' }),
+          new Request('https://imovi.test/api/auditoria/config', {
+            method: 'PUT',
+            headers: { origin: 'https://imovi.test' },
+            body: '{}',
+          }),
         )
       ).status,
     ).toBe(403);

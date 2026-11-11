@@ -7,7 +7,7 @@ export const PublicEstimateSchema = z.object({
   confidenceLow: z.number().nonnegative(),
   confidenceHigh: z.number().positive(),
   modelVersion: z.string(),
-  featuresUsed: z.record(z.number()),
+  featuresUsed: z.record(z.string(), z.number()),
   property: z.object({
     city: z.string(),
     state: z.string().length(2),

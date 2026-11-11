@@ -50,6 +50,7 @@ service = "imovi-web-preview"
 
 [env.preview.vars]
 NEXT_PUBLIC_APP_ENV = "preview"
+NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAAC-vdQ1-_9T1AmV_"
 
 [[env.preview.r2_buckets]]
 binding = "MODEL_ARTIFACTS"

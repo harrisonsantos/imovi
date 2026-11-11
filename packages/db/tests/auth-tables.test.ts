@@ -1,6 +1,7 @@
+import { readFile } from 'node:fs/promises';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { users, organizations, members, billingEvents } from '../src/schema-auth.js';
+import { users, organizations, members, invitations, billingEvents } from '../src/schema-auth.js';
 import { createTestDb, type TestDb } from './setup.js';
 
 describe('tabelas de auth (better-auth + organizations)', () => {
@@ -79,5 +80,40 @@ describe('tabelas de auth (better-auth + organizations)', () => {
 
     const rows = await t.db.select().from(members);
     expect(rows).toHaveLength(0);
+  });
+
+  it('migration 0011 preenche invitations.created_at em linhas existentes e é idempotente', async () => {
+    const prod = await readFile(
+      new URL('../migrations/0011_invitation_created_at.sql', import.meta.url),
+      'utf8',
+    );
+    const pglite = await readFile(
+      new URL('../migrations/0011_invitation_created_at_pglite.sql', import.meta.url),
+      'utf8',
+    );
+    expect(pglite).toBe(prod);
+
+    const legacy = await createTestDb({ through: 8 });
+    try {
+      await legacy.db.insert(users).values({ id: 'u-1', name: 'Ana', email: 'a@a.com' });
+      await legacy.db
+        .insert(organizations)
+        .values({ id: 'org-1', name: 'Alfa', slug: 'alfa' });
+      await legacy.raw.query(
+        `INSERT INTO invitations (id, organization_id, email, role, status, expires_at, inviter_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        ['inv-1', 'org-1', 'convidado@alfa.com', 'member', 'pending', new Date(Date.now() + 86_400_000), 'u-1'],
+      );
+      await legacy.raw.exec(prod);
+      await legacy.raw.exec(prod);
+      const rows = await legacy.db
+        .select()
+        .from(invitations)
+        .where(eq(invitations.id, 'inv-1'));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.createdAt).toBeInstanceOf(Date);
+    } finally {
+      await legacy.dispose();
+    }
   });
 });

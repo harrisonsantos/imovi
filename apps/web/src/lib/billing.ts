@@ -104,5 +104,5 @@ export function appUrlFromRequest(req: Request, configured?: string): string {
 
 export function hasTrustedOrigin(req: Request, appUrl: string): boolean {
   const origin = req.headers.get('origin');
-  return origin === null || origin === new URL(appUrl).origin;
+  return origin !== null && origin === new URL(appUrl).origin;
 }
