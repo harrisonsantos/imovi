@@ -17,3 +17,4 @@ export { iptuRepo, type IptuRepo } from './repositories/iptu.js';
 export { modelVersionRepo, type ModelVersionRepo } from './repositories/model-versions.js';
 export { scrapeErrorRepo, type ScrapeErrorRepo } from './repositories/scrape-errors.js';
 export type { AnyDbClient } from './repositories/types.js';
+export { accountRepo, AccountAnonymizationError } from './repositories/members.js';

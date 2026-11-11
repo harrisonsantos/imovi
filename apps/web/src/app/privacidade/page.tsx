@@ -39,6 +39,10 @@ export default function PrivacidadePage() {
             'Quando você aceita os Termos de uso e esta Política, guardamos o identificador da sua conta, a versão dos Termos de uso, a versão desta Política, a origem do aceite (cadastro da conta ou da imobiliária) e a data e hora do aceite. Usamos esse registro para comprovar o aceite e o contrato firmado com você. A base legal é a execução de contrato e o cumprimento de obrigação legal (LGPD, art. 7º, incisos V e II). Mantemos o registro enquanto a conta existir e, depois disso, pelo prazo prescricional aplicável. Quando os documentos mudam, um novo aceite é registrado e cada versão aceita fica preservada no histórico.',
           ],
           [
+            'Exclusão da conta',
+            'A exclusão da conta é realizada por anonimização dos dados cadastrais, com remoção das credenciais de acesso, sessões e vínculos com organizações. Preservamos apenas o registro de aceite dos Termos de uso e desta Política, vinculado ao identificador da conta anonimizada, pelo prazo prescricional legal aplicável.',
+          ],
+          [
             'Dados técnicos',
             'Podemos registrar endereço IP, agente do navegador, eventos de segurança, falhas e métricas agregadas necessárias para proteger e operar o serviço.',
           ],

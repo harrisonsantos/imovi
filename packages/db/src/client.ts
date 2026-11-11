@@ -4,8 +4,9 @@
  * `createDbClient` retorna o cliente para uso real (Neon).
  * Para testes, veja `tests/setup.ts` que expõe uma variante pglite-compatível.
  */
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
+import { neon, Pool, type NeonQueryFunction } from '@neondatabase/serverless';
 import { drizzle, type NeonHttpDatabase } from 'drizzle-orm/neon-http';
+import { drizzle as drizzleTransactional } from 'drizzle-orm/neon-serverless';
 import * as schema from './schema.js';
 
 export type DbClient = NeonHttpDatabase<typeof schema>;
@@ -28,4 +29,12 @@ export function createDbClient(options: CreateDbClientOptions): DbClient {
   }
   const sql: NeonQueryFunction<false, false> = neon(url);
   return drizzle(sql, { schema });
+}
+
+/** Conexão por requisição para callbacks transacionais; sempre chamar close no finally. */
+export function createTransactionalDbClient(options: CreateDbClientOptions) {
+  const url = options.connectionString?.trim();
+  if (!url) throw new Error('createTransactionalDbClient: connectionString vazia.');
+  const pool = new Pool({ connectionString: url });
+  return { db: drizzleTransactional(pool, { schema }), close: () => pool.end() };
 }
