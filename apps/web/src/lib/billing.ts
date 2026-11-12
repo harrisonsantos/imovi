@@ -1,4 +1,9 @@
-export type BillingPlanId = 'audit-essencial' | 'audit-profissional' | 'audit-escala';
+export type BillingProduct = 'audit' | 'corretor_pro';
+export type BillingPlanId =
+  | 'audit-essencial'
+  | 'audit-profissional'
+  | 'audit-escala'
+  | 'corretor_pro';
 
 export interface BillingPlan {
   id: BillingPlanId;
@@ -6,11 +11,15 @@ export interface BillingPlan {
   priceMonthly: number;
   maxCorretores: number | null;
   priceEnv: string;
+  product: BillingProduct;
+  entitlements: { monthlyEstimatesQuota: number | null; ads: boolean; history: boolean };
 }
 
 export const BILLING_PLANS: readonly BillingPlan[] = [
   {
     id: 'audit-essencial',
+    product: 'audit',
+    entitlements: { monthlyEstimatesQuota: null, ads: true, history: false },
     name: 'Essencial',
     priceMonthly: 149,
     maxCorretores: 5,
@@ -18,6 +27,8 @@ export const BILLING_PLANS: readonly BillingPlan[] = [
   },
   {
     id: 'audit-profissional',
+    product: 'audit',
+    entitlements: { monthlyEstimatesQuota: null, ads: true, history: false },
     name: 'Profissional',
     priceMonthly: 299,
     maxCorretores: 15,
@@ -25,10 +36,21 @@ export const BILLING_PLANS: readonly BillingPlan[] = [
   },
   {
     id: 'audit-escala',
+    product: 'audit',
+    entitlements: { monthlyEstimatesQuota: null, ads: true, history: false },
     name: 'Escala',
     priceMonthly: 499,
     maxCorretores: null,
     priceEnv: 'STRIPE_PRICE_AUDIT_ESCALA',
+  },
+  {
+    id: 'corretor_pro',
+    product: 'corretor_pro',
+    name: 'Corretor Pro',
+    priceMonthly: 49,
+    maxCorretores: 1,
+    priceEnv: 'STRIPE_PRICE_CORRETOR_PRO',
+    entitlements: { monthlyEstimatesQuota: 100, ads: false, history: true },
   },
 ] as const;
 

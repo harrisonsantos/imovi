@@ -35,14 +35,15 @@ function withoutComingSoon(markup: string): string {
   return markup.replace(/<section[^>]*id="em-breve"[\s\S]*?<\/section>/, '');
 }
 
-const FUTURE_FEATURES = /PDF|\bAPI\b|comparáve|histórico|ilimitad/i;
+const FUTURE_FEATURES = /PDF|\bAPI\b|comparáve|histórico de preços|ilimitad/i;
 
 describe('/auditoria/assinatura respeita os planos públicos', () => {
   it('não promete corretores ilimitados e usa preços e limites do servidor', () => {
     const page = text(html(AssinaturaPage));
     expect(page).not.toMatch(/ilimitad/i);
     expect(JSON.stringify(BILLING_PLANS)).not.toMatch(/ilimitad/i);
-    for (const plan of BILLING_PLANS) {
+    expect(page).not.toContain('Corretor Pro');
+    for (const plan of BILLING_PLANS.filter((plan) => plan.product === 'audit')) {
       expect(page).toContain(plan.name);
       expect(page).toContain(`R$ ${plan.priceMonthly} /mês`);
       expect(page).toContain(
@@ -62,7 +63,7 @@ describe('/precos vende apenas o que está entregue', () => {
   });
 
   it('mantém os três planos da auditoria com preço e limite do servidor', () => {
-    for (const plan of BILLING_PLANS) {
+    for (const plan of BILLING_PLANS.filter((plan) => plan.product === 'audit')) {
       expect(text(page)).toContain(`R$ ${plan.priceMonthly}/mês`);
       expect(page).toContain(`/auditoria/cadastro?plan=${plan.id}`);
       if (plan.maxCorretores) expect(text(page)).toContain(`Até ${plan.maxCorretores} corretores`);
@@ -75,6 +76,24 @@ describe('/precos vende apenas o que está entregue', () => {
     expect(delivered).toContain('Vista CRM');
     expect(delivered).toContain('14 dias');
     expect(delivered).toMatch(/exporta[çc][ãa]o em CSV/i);
+    expect(delivered).not.toMatch(FUTURE_FEATURES);
+  });
+
+  it('offers Corretor Pro with the server price, monthly quota and heuristic limits (AC-P6)', () => {
+    const plan = BILLING_PLANS.find((p) => p.id === 'corretor_pro');
+    expect(plan).toMatchObject({
+      priceMonthly: 49,
+      product: 'corretor_pro',
+      maxCorretores: 1,
+      entitlements: { monthlyEstimatesQuota: 100, ads: false, history: true },
+    });
+    const delivered = text(withoutComingSoon(page));
+    expect(delivered).toContain('Corretor Pro');
+    expect(delivered).toContain(`R$ ${plan?.priceMonthly}/mês`);
+    expect(delivered).toContain(`${plan?.entitlements.monthlyEstimatesQuota} estimativas/mês`);
+    expect(delivered).toContain('±30%');
+    expect(delivered).toContain('sem anúncios');
+    expect(delivered).toContain('próprias estimativas');
     expect(delivered).not.toMatch(FUTURE_FEATURES);
   });
 

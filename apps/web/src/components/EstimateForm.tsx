@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { tokens as C } from '@/lib/tokens';
 import { sourceDescription, type PublicEstimate } from '@/lib/public-estimate';
+import { useEntitlements } from '@/lib/use-entitlements';
 
 // ── Types (from original estimate-form.tsx) ────────────────────────────────
 type PropertyType = 'apartment' | 'house' | 'commercial' | 'land';
@@ -94,7 +95,8 @@ export function EstimateForm({ siteKey }: EstimateFormProps = {}) {
   const [error, setError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
-  const turnstileEnabled = Boolean(siteKey);
+  const entitlements = useEntitlements();
+  const turnstileEnabled = Boolean(siteKey) && !entitlements?.quota;
 
   // Expose Turnstile callback globally
   useEffect(() => {

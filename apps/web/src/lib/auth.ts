@@ -20,6 +20,7 @@ import {
   invitations,
 } from '@imovi/db/schema-auth';
 import { isProductionEnv } from './cf-env.js';
+import { orgRepo } from '@imovi/db/orgs';
 import { getDb } from './db.js';
 import {
   assertSignupTermsAccepted,
@@ -136,19 +137,37 @@ function buildAuth(env: AuthEnv) {
     }),
     plugins: [
       organization({
-        // Toda org nova nasce em trial de 14 dias (gate de monetização F8a).
+        schema: {
+          organization: {
+            additionalFields: {
+              plan: { type: 'string', required: false, input: false },
+              status: { type: 'string', required: false, input: false },
+              maxCorretores: { type: 'number', required: false, input: false },
+            },
+          },
+        },
+        membershipLimit: async (_user, org) =>
+          (await orgRepo.findById(db, org.id))?.plan === 'corretor_pro' ? 1 : 100,
+        invitationLimit: async ({ organization: org }) =>
+          (await orgRepo.findById(db, org.id))?.plan === 'corretor_pro' ? 0 : 100,
+        // Auditoria começa em trial; Corretor Pro só recebe direitos após pagamento.
         organizationHooks: {
-          beforeCreateOrganization: async ({ user }) => {
+          beforeCreateOrganization: async ({ user, organization: org }) => {
             if (production && !user.emailVerified) throw new Error('Confirme seu e-mail primeiro.');
             await requireCurrentTermsAcceptance(db, user.id);
+            if (org.metadata?.product === 'corretor_pro')
+              return {
+                data: { ...org, plan: 'corretor_pro', status: 'pending', maxCorretores: 1 },
+              };
+            return { data: { ...org, plan: 'trial', status: 'trial', maxCorretores: null } };
           },
           afterCreateOrganization: async ({
             organization: org,
           }: {
             organization: { id: string };
           }) => {
+            if ((await orgRepo.findById(db, org.id))?.plan === 'corretor_pro') return;
             const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-            const { orgRepo } = await import('@imovi/db/orgs');
             await orgRepo.setTrialEndsAt(db, org.id, trialEndsAt);
           },
         },

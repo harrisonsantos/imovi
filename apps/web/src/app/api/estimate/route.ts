@@ -15,7 +15,8 @@ import {
   requiresProductionProtection,
 } from '@/lib/estimate-protection';
 import { publicEstimateOf } from '@/lib/public-estimate';
-
+import { resolveEstimateAccess } from '@/lib/entitlements';
+import { usageCounterRepo } from '@imovi/db/rate-limit';
 
 const RequestSchema = z.object({
   city: z.string().trim().min(1).max(120),
@@ -32,13 +33,14 @@ const RequestSchema = z.object({
 export async function POST(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();
   const production = requiresProductionProtection(cfEnv);
-  if (production && !cfEnv.TURNSTILE_SECRET) {
-    return apiError(503, 'protection_unavailable', 'Verificação anti-bot indisponível.');
-  }
   const ip = clientIp(req, production);
   if (!ip) return apiError(503, 'protection_unavailable', 'Proteção de acesso indisponível.');
 
   try {
+    const access = await resolveEstimateAccess(req, cfEnv);
+    if (!access.plan && production && !cfEnv.TURNSTILE_SECRET) {
+      return apiError(503, 'protection_unavailable', 'Verificação anti-bot indisponível.');
+    }
     const db = getDb(cfEnv.DATABASE_URL);
     const rate = await consumeEstimateLimit(
       db,
@@ -68,6 +70,7 @@ export async function POST(req: Request): Promise<Response> {
       return apiError(400, 'invalid_request', 'Parâmetros inválidos.', parsed.error.flatten());
     const { turnstileToken, ...body } = parsed.data;
     if (
+      !access.plan &&
       cfEnv.TURNSTILE_SECRET &&
       !(await verifyTurnstile(cfEnv.TURNSTILE_SECRET, turnstileToken ?? '', ip))
     ) {
@@ -104,6 +107,24 @@ export async function POST(req: Request): Promise<Response> {
     if (!Number.isFinite(priceM2) || priceM2 <= 0)
       return apiError(503, 'no_price_data', 'Bairro sem referência de preço válida.');
 
+    if (access.plan && access.org) {
+      const quota = await usageCounterRepo.consumeMonthlyQuota(db, {
+        orgId: access.org.id,
+        metric: 'estimates',
+        limit: access.plan.entitlements.monthlyEstimatesQuota!,
+      });
+      if (!quota.allowed)
+        return Response.json(
+          {
+            error: 'quota_exceeded',
+            limit: quota.limit,
+            renewsAt: quota.renewsAt,
+            message: 'Cota mensal esgotada. Aguarde a renovação para continuar.',
+          },
+          { status: 402, headers: { 'Cache-Control': 'no-store' } },
+        );
+    }
+
     // ONNX remains disabled until the Cloudflare runtime is independently verified.
     const result = estimateHeuristic({
       neighborhoodPriceM2: priceM2,
@@ -135,6 +156,7 @@ export async function POST(req: Request): Promise<Response> {
       featuresUsed: result.featuresUsed,
       comparablesIds: null,
       requestedBy: null,
+      ownerUserId: access.plan ? access.session!.userId : null,
       resultMetadata: {
         method: 'heuristic',
         neighborhood: { name: hood.name, medianPriceM2: priceM2 },

@@ -24,6 +24,7 @@ const MIGRATION_FILES = [
   '0008_terms_acceptance_pglite.sql',
   '0010_account_anonymization_pglite.sql',
   '0011_invitation_created_at_pglite.sql',
+  '0012_entitlements_pglite.sql',
 ];
 
 export interface TestDb {

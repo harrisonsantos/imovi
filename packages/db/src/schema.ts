@@ -23,7 +23,10 @@ import {
   doublePrecision,
   uniqueIndex,
   index,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { organizations, users } from './schema-auth.js';
 
 export const cities = pgTable(
   'cities',
@@ -170,11 +173,16 @@ export const priceEstimates = pgTable(
     featuresUsed: jsonb('features_used'),
     comparablesIds: uuid('comparables_ids').array(),
     requestedBy: uuid('requested_by'),
+    ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     propertyIdx: index('price_estimates_property_idx').on(t.propertyId),
     modelIdx: index('price_estimates_model_idx').on(t.modelVersion),
+    ownerCreatedIdx: index('price_estimates_owner_created_idx').on(
+      t.ownerUserId,
+      t.createdAt.desc(),
+    ),
   }),
 );
 
@@ -251,6 +259,22 @@ export const apiRateLimits = pgTable('api_rate_limits', {
   windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
   count: integer('count').notNull().default(1),
 });
+
+export const usageCounters = pgTable(
+  'usage_counters',
+  {
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    metric: text('metric').notNull(),
+    periodStart: timestamp('period_start', { withTimezone: true })
+      .notNull()
+      .default(sql`(date_trunc('month', now() AT TIME ZONE 'utc') AT TIME ZONE 'utc')`),
+    count: integer('count').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.orgId, t.metric, t.periodStart] }) }),
+);
 
 export type City = typeof cities.$inferSelect;
 export type NewCity = typeof cities.$inferInsert;

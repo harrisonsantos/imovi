@@ -7,7 +7,6 @@ import { Footer } from '@/components/Footer';
 import { BILLING_PLANS } from '@/lib/billing';
 import { tokens as C } from '@/lib/tokens';
 
-
 /** Preço e limite vêm de BILLING_PLANS, a mesma fonte do checkout e do webhook. */
 function corretoresLabel(max: number | null, previous: number | null): string {
   if (max !== null) return `Até ${max} corretores`;
@@ -15,7 +14,8 @@ function corretoresLabel(max: number | null, previous: number | null): string {
     ? `Acima de ${previous} corretores`
     : 'Sem limite de corretores no plano';
 }
-const AUDIT_PLANS = BILLING_PLANS.map((plan, i) => ({
+const CORRETOR_PRO = BILLING_PLANS.find((plan) => plan.id === 'corretor_pro')!;
+const AUDIT_PLANS = BILLING_PLANS.filter((plan) => plan.product === 'audit').map((plan, i) => ({
   id: plan.id,
   name: plan.name,
   price: plan.priceMonthly,
@@ -35,7 +35,6 @@ const AUDIT_FEATURES = [
 const COMING_SOON = [
   'Relatórios de avaliação em PDF',
   'Imóveis comparáveis e histórico de preços na estimativa',
-  'Plano para corretores com mais estimativas e sem anúncios',
   'API de estimativas para integrações',
 ];
 
@@ -135,6 +134,27 @@ export default function PrecosPage() {
               </article>
             ))}
           </div>
+        </section>
+        <section id="corretor-pro" style={{ ...card, marginTop: '3rem' }}>
+          <h2>{CORRETOR_PRO.name}</h2>
+          <p style={{ fontSize: '1.75rem' }}>R$ {CORRETOR_PRO.priceMonthly}/mês</p>
+          <p>{CORRETOR_PRO.entitlements.monthlyEstimatesQuota} estimativas/mês</p>
+          <ul>
+            <li>
+              Estimativas heurísticas com faixa indicativa de ±30%, sem confiança estatística
+              validada.
+            </li>
+            <li>Navegação sem anúncios.</li>
+            <li>Registro das próprias estimativas feitas na conta.</li>
+          </ul>
+          <p>Plano individual. A cota renova no primeiro dia de cada mês, em UTC.</p>
+          <Link href="/conta/cadastro" style={{ color: C.accent }}>
+            Assinar Corretor Pro →
+          </Link>
+          {' · '}
+          <Link href="/conta/estimativas" style={{ color: C.accent }}>
+            Minhas estimativas
+          </Link>
         </section>
         <section id="em-breve" style={{ ...card, marginTop: '3rem' }}>
           <h2>Em breve</h2>

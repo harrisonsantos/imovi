@@ -34,7 +34,7 @@ export function BillingButton({
         message?: string;
       } | null;
       if (res.status === 401) {
-        window.location.href = '/auditoria/login';
+        window.location.href = window.location.pathname.startsWith('/conta') ? '/conta/login' : '/auditoria/login';
         return;
       }
       if (!res.ok || !body?.url) {

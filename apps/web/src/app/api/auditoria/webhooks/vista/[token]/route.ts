@@ -13,7 +13,7 @@ import { orgRepo } from '@imovi/db/orgs';
 import { getCfEnv } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
-
+import { assertOrgProduct, sessionGuard } from '@/lib/session';
 
 export async function POST(
   req: Request,
@@ -41,6 +41,12 @@ export async function POST(
   // dashboard é bloqueado pelo gate em requireOrg. O limite de corretores do
   // plano é aplicado como aviso (warn, don't drop) via maxCorretores abaixo.
   const org = await orgRepo.findById(db, config.orgId);
+  if (!org) return apiError(404, 'not_found', 'Webhook não encontrado.');
+  try {
+    assertOrgProduct(org);
+  } catch (error) {
+    return sessionGuard(error);
+  }
 
   let json: unknown;
   try {

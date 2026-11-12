@@ -4,6 +4,7 @@ import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
 import { CONSENT_EVENT, readConsent } from '@/lib/consent';
 import { tokens as C } from '@/lib/tokens';
+import { useEntitlements } from '@/lib/use-entitlements';
 
 declare global {
   interface Window {
@@ -13,7 +14,17 @@ declare global {
   }
 }
 
-export function AdSlot({ slot, format = 'auto' }: { slot?: string; format?: string }) {
+export function AdSlot({
+  slot,
+  format = 'auto',
+  adsEnabled,
+}: {
+  slot?: string;
+  format?: string;
+  adsEnabled?: boolean;
+}) {
+  const entitlements = useEntitlements();
+  const enabled = adsEnabled ?? entitlements?.ads ?? false;
   const client = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
   const [allowed, setAllowed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -27,14 +38,14 @@ export function AdSlot({ slot, format = 'auto' }: { slot?: string; format?: stri
   }, []);
 
   useEffect(() => {
-    if (!allowed || !ready || requested.current) return;
+    if (!enabled || !allowed || !ready || requested.current) return;
     window.adsbygoogle = window.adsbygoogle ?? [];
     window.adsbygoogle.requestNonPersonalizedAds = 1;
     window.adsbygoogle.push({});
     requested.current = true;
-  }, [allowed, ready]);
+  }, [enabled, allowed, ready]);
 
-  if (!allowed) return null;
+  if (!enabled || !allowed) return null;
   if (!client || !slot) {
     return process.env.NODE_ENV === 'development' ? (
       <div

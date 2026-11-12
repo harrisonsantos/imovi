@@ -15,6 +15,7 @@ import { AuthConfigurationError, getAuth, type AuthEnv } from './auth.js';
 import { isProductionEnv } from './cf-env.js';
 import { getDb } from './db.js';
 import { apiError } from './errors.js';
+import { getBillingPlan, type BillingProduct } from './billing.js';
 
 export class SessionError extends Error {
   constructor(
@@ -79,14 +80,28 @@ export async function requireSession(req: Request, env: AuthEnv = {}): Promise<S
 /** Status de org que permitem acesso ao módulo de auditoria. */
 const ACTIVE_STATUSES = new Set(['trial', 'active', 'past_due']);
 
+export function assertOrgProduct(
+  org: { plan?: string },
+  requiredProduct: BillingProduct = 'audit',
+) {
+  // Existing organizations use "trial" until their first paid audit subscription.
+  const product =
+    org.plan === 'trial' || org.plan === undefined ? 'audit' : getBillingPlan(org.plan)?.product;
+  if (product !== requiredProduct) {
+    throw new SessionError(403, 'product_required', 'Seu plano não inclui este produto.');
+  }
+}
+
 /**
  * Gate de acesso puro (testável sem better-auth/DB): valida status e trial.
  * Lança SessionError quando o acesso deve ser negado.
  */
 export function assertOrgAccess(
-  org: Pick<Organization, 'status' | 'trialEndsAt'>,
+  org: Pick<Organization, 'status' | 'trialEndsAt'> & { plan?: string },
   now: Date = new Date(),
+  requiredProduct: BillingProduct = 'audit',
 ): void {
+  assertOrgProduct(org, requiredProduct);
   if (!ACTIVE_STATUSES.has(org.status)) {
     throw new SessionError(
       403,
@@ -96,8 +111,8 @@ export function assertOrgAccess(
   }
   if (
     org.status === 'trial' &&
-    org.trialEndsAt !== null &&
-    org.trialEndsAt.getTime() < now.getTime()
+    ((requiredProduct === 'corretor_pro' && org.trialEndsAt === null) ||
+      (org.trialEndsAt !== null && org.trialEndsAt.getTime() <= now.getTime()))
   ) {
     throw new SessionError(
       403,
