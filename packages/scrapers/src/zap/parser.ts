@@ -6,16 +6,96 @@ export interface ParseContext {
   scrapedAt: Date;
 }
 
-/** Schema.org types usados pelo Zap → PropertyType do domínio. */
-function mapZapType(raw: string | undefined | null): PropertyType | null {
+function schemaOrgToken(raw: string): string {
+  const trimmed = raw.trim();
+  const idx = trimmed.lastIndexOf('/');
+  return (idx >= 0 ? trimmed.slice(idx + 1) : trimmed).toLowerCase();
+}
+
+function mapDirectSchemaType(raw: string | undefined | null): PropertyType | null {
   if (!raw) return null;
   const v = raw.toLowerCase();
-  if (v === 'apartment' || v === 'place') return 'apartment';
+  if (v === 'apartment') return 'apartment';
   if (v === 'house' || v === 'singlefamilyresidence') return 'house';
-  if (v === 'landforsale' || v === 'lot' || v === 'lotorfarm') return 'land';
+  if (v === 'landforsale' || v === 'lot' || v === 'lotorfarm' || v === 'landform' || v === 'land')
+    return 'land';
   if (v === 'commercialproperty') return 'commercial';
-  // Fallback: usa o mesmo mapeamento por keyword
+  if (v === 'product' || v === 'place') return null;
   return mapPropertyType(raw);
+}
+
+function mapAdditionalTypeTokens(tokens: string[]): PropertyType | null {
+  for (const token of tokens) {
+    if (token === 'apartment') return 'apartment';
+    if (token === 'house' || token === 'singlefamilyresidence') return 'house';
+    if (token === 'landform' || token === 'land' || token === 'landforsale') return 'land';
+    if (token === 'commercialproperty' || token === 'officebuilding') return 'commercial';
+    if (token !== 'place' && token !== 'product') {
+      const mapped = mapPropertyType(token);
+      if (mapped) return mapped;
+    }
+  }
+  return null;
+}
+
+/** Inferência por palavras-chave no título/URL (schema Place ou additionalType genérico). */
+function inferPropertyTypeFromText(
+  name: string | undefined,
+  url: string | undefined,
+): PropertyType | null {
+  const text = `${name ?? ''} ${url ?? ''}`.toLowerCase();
+  if (/cobertura|apartamento|studio|kitnet|flat/.test(text)) return 'apartment';
+  if (/casa|sobrado|condom[ií]nio fechado/.test(text)) return 'house';
+  if (/terreno|lote/.test(text)) return 'land';
+  if (/sala|loja|comercial|galp[aã]o|conjunto|pr[eé]dio/.test(text)) return 'commercial';
+  return null;
+}
+
+interface ZapLdItem {
+  '@type'?: string;
+  additionalType?: string | string[];
+  '@id'?: string;
+  name?: string;
+  url?: string;
+  description?: string;
+  keywords?: string;
+  address?: {
+    streetAddress?: string;
+    addressLocality?: string;
+    addressRegion?: string;
+  };
+  floorSize?: { value?: number };
+  numberOfBedrooms?: number;
+  numberOfBathroomsTotal?: number;
+  offers?: { price?: number };
+}
+
+function resolveZapPropertyType(item: ZapLdItem): PropertyType | null {
+  const atType = item['@type'];
+  const direct = mapDirectSchemaType(atType);
+  const isProduct = (atType ?? '').toLowerCase() === 'product';
+
+  if (!isProduct && direct) return direct;
+
+  const additionalRaw = item.additionalType;
+  const additionalTokens = Array.isArray(additionalRaw)
+    ? additionalRaw.map(schemaOrgToken)
+    : additionalRaw
+      ? [schemaOrgToken(additionalRaw)]
+      : [];
+
+  const fromAdditional = mapAdditionalTypeTokens(additionalTokens);
+  if (fromAdditional) return fromAdditional;
+
+  const hasOnlyPlace =
+    additionalTokens.length === 0 ||
+    additionalTokens.every((t) => t === 'place' || t === 'product');
+
+  if (isProduct || hasOnlyPlace || !direct) {
+    return inferPropertyTypeFromText(item.name, item.url);
+  }
+
+  return direct;
 }
 
 /** Extrai "X vaga(s)" do name/keywords. */
@@ -36,24 +116,6 @@ function extractNeighborhoodFromName(name: string, city: string): string | undef
 function detectOperation(url: string): Operation {
   if (url.includes('/aluguel') || url.includes('/rent')) return 'rent';
   return 'sale';
-}
-
-interface ZapLdItem {
-  '@type'?: string;
-  '@id'?: string;
-  name?: string;
-  url?: string;
-  description?: string;
-  keywords?: string;
-  address?: {
-    streetAddress?: string;
-    addressLocality?: string;
-    addressRegion?: string;
-  };
-  floorSize?: { value?: number };
-  numberOfBedrooms?: number;
-  numberOfBathroomsTotal?: number;
-  offers?: { price?: number };
 }
 
 /**
@@ -102,7 +164,7 @@ export function parseZapListingPage(html: string, ctx: ParseContext): RawListing
       const bathrooms =
         typeof item.numberOfBathroomsTotal === 'number' ? item.numberOfBathroomsTotal : null;
       const parking = parseParking(item.keywords ?? item.name);
-      const propertyType = mapZapType(item['@type']);
+      const propertyType = resolveZapPropertyType(item);
 
       // Constrói addressRaw combinando street + bairro + cidade/UF
       const street = item.address?.streetAddress;

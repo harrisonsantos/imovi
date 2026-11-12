@@ -57,14 +57,14 @@ export interface CityJob {
  * Cada portal formata URL-de-listagem de jeito próprio — a string em
  * `locations` é interpolada direto na URL pelo adapter.
  */
-const DEFAULT_CITY_JOBS: CityJob[] = [
+export const DEFAULT_CITY_JOBS: CityJob[] = [
   {
     name: 'Curitiba',
     state: 'PR',
     locations: {
       zap: 'pr+curitiba',
       vivareal: 'parana/curitiba',
-      olx: 'pr/cidade-curitiba',
+      olx: 'pr/curitiba',
     },
   },
 ];
