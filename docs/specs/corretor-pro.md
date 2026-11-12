@@ -1,6 +1,6 @@
 # T7 — Corretor Pro e API: spec e direitos de acesso
 
-Data: 05/11/2026. Status: **rascunho para decisão do usuário** (seção 7).
+Data: 05/11/2026 (atualizado em 12/11/2026). Status: **Fase 1 concluída e integrada (`8addd4b`)**; aguarda Gate G3 (Stripe sandbox) para ciclo de cobrança externa (T7d).
 Depende de: T3 (concluída), G3 (Stripe sandbox) para cobrar de verdade.
 Referências: [PLANO-UNIFICADO.md](PLANO-UNIFICADO.md), [../monetization-readiness.md](../monetization-readiness.md).
 
