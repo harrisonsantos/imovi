@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { parseRobotsTxt } from '../src/core/robots.js';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import {
+  parseRobotsTxt,
+  fetchRobotsPolicy,
+  clearRobotsPolicyCache,
+} from '../src/core/robots.js';
 
 describe('parseRobotsTxt', () => {
+  beforeEach(() => {
+    clearRobotsPolicyCache();
+  });
+
   it('permite tudo quando robots.txt vazio', () => {
     const policy = parseRobotsTxt('');
     expect(policy.isAllowed('ImoviBR-Bot', '/qualquer/caminho')).toBe(true);
@@ -54,5 +62,34 @@ describe('parseRobotsTxt', () => {
     // `/a/b/c` → Allow(/a/b) tem 4 chars, Disallow(/a) tem 2. Allow vence.
     expect(policy.isAllowed('ImoviBR-Bot', '/a/b/c')).toBe(true);
     expect(policy.isAllowed('ImoviBR-Bot', '/a/x')).toBe(false);
+  });
+
+  it('suporta wildcards * e âncora $ conforme RFC 9309 §2.2.3', () => {
+    const txt = [
+      'User-agent: *',
+      'Disallow: /*?*onde=*',
+      'Disallow: /relatorios/*.pdf$',
+      'Allow: /relatorios/publico.pdf$',
+    ].join('\n');
+    const policy = parseRobotsTxt(txt);
+
+    expect(policy.isAllowed('ImoviBR-Bot', '/venda/imoveis/pr+curitiba/?pagina=1')).toBe(true);
+    expect(policy.isAllowed('ImoviBR-Bot', '/busca?transacao=venda&onde=curitiba')).toBe(false);
+    expect(policy.isAllowed('ImoviBR-Bot', '/relatorios/secreto.pdf')).toBe(false);
+    expect(policy.isAllowed('ImoviBR-Bot', '/relatorios/secreto.pdf?download=1')).toBe(true);
+    expect(policy.isAllowed('ImoviBR-Bot', '/relatorios/publico.pdf')).toBe(true);
+  });
+
+  it('cacheia fetchRobotsPolicy por host evitando requisições repetidas ao /robots.txt', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response('User-agent: *\nDisallow: /admin', { status: 200 }),
+    );
+
+    const p1 = await fetchRobotsPolicy('www.zapimoveis.com.br', fetchMock as unknown as typeof fetch);
+    const p2 = await fetchRobotsPolicy('www.zapimoveis.com.br', fetchMock as unknown as typeof fetch);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(p1.isAllowed('ImoviBR-Bot', '/admin/painel')).toBe(false);
+    expect(p2.isAllowed('ImoviBR-Bot', '/venda/imoveis')).toBe(true);
   });
 });

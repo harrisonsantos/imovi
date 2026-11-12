@@ -36,7 +36,6 @@ export class InfoSimplesAdapter {
     this.endpoint = config.endpoint ?? DEFAULT_ENDPOINT;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.logger = config.logger ?? noopLogger;
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     this.fetchFn = config.fetchFn ?? globalThis.fetch;
   }
 

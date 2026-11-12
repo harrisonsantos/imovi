@@ -101,12 +101,10 @@ async function main(): Promise<void> {
       },
     });
 
-  // eslint-disable-next-line no-console
   console.log(`[seed:cities] ${CITIES.length} cidades sincronizadas.`);
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('[seed:cities] falhou:', err);
   process.exit(1);
 });

@@ -60,11 +60,18 @@ Critério de alocação:
 | T6  | Retreinar e promover o v2 com corpus real e split temporal                                                                                                                             | Claude                        | —                    | G1, G4     |
 | T7  | Corretor Pro (R$ 39–59) e API: spec e entitlements                                                                                                                                     | Claude (spec) + Codex (impl.) | —                    | T3 e G3    |
 
-**Status em 05/11/2026 (noite):**
+**Status em 12/11/2026:**
 
-- T3: concluída na branch `harrisonsantos/produto-p0` (`a01672a`, `886ce8b`, `b6a6dc6`): P0 de confiança, aceite de termos (`0008`, `ON DELETE RESTRICT`) e Política de privacidade citando o aceite.
-- T2 e T4: os workers Codex caíram sem reportar, com a cota de sessão do Codex em 85%. Os dois deixaram commit (`06667e5` em `opennext`, `6d34ecb` em `iptu-curitiba`). A verificação desses commits foi redespachada para Gemini (Antigravity) como T2v e T4v.
-- T7: a spec está em [corretor-pro.md](corretor-pro.md) e aguarda as decisões D1 a D4.
+- T1, T2 (`06667e5`), T3 (`a01672a`, `886ce8b`, `b6a6dc6`) e T4 (`6d34ecb`): concluídas, verificadas (T2v e T4v) e integradas em `harrisonsantos/integracao`.
+- Entregas pós-T4 integradas em `harrisonsantos/integracao` (`d4a747a`):
+  - **Reconciliação de migrations legadas (`ead3984`)**: suporte ao Gate G1 em banco `imovi-prod` sem `schema_migrations`, validando `0001`..`0011` com SHA-256.
+  - **Anonimização de conta (`820d171`)**: migration `0010_account_anonymization.sql` e rota `/api/conta/excluir` preservando trilha `terms_acceptances`.
+  - **Diagnóstico e telemetria de coleta (`b0160ad`)**: `ScrapeDiagnosticError` com URL real em `scrape_errors` e relatório [diagnostico-coleta-2026-11.md](diagnostico-coleta-2026-11.md).
+  - **Bloqueadores do PR #5 e segurança de dependências (`5ae22bd` + merge `d4a747a`)**: migration `0011_invitation_created_at.sql` (`better-auth@1.7.7`), zero vulnerabilidades high/critical (`zod@4.6.6`, `sharp@0.35.5`, `undici@7.30.1`, `vite@6.4.4`), validação binária de PDF/JPEG/PNG e limpeza R2 no rollback.
+- **Ciclo atual (12/11/2026) — distribuição em 3 frentes sem sobreposição de arquivos:**
+  - **Antigravity (Coordenador + Core Scrapers Fase 2 & Qualidade):** finalização do merge de `bloqueadores-pr5`, suporte a wildcards RFC 9309 §2.2.3 e cache por host em `robots.ts`, cookie jar por host (`__cf_bm`/`_cfuvid`) e headers `Accept-Language: pt-BR` no `Fetcher`, e remoção dos 12 avisos de ESLint em `packages/enrichment` e `packages/db/seeds`.
+  - **Cursor (`composer-2.5` — Recuperação da Coleta Fase 1):** atualização dos parsers de Zap (`@type: Product` + `additionalType`), VivaReal (`@type: Product` + fallback de bairro por URL/DOM) e OLX (chunks RSC `self.__next_f.push` do Next.js App Router + rota `pr/curitiba` no worker).
+  - **Codex (`gpt-6-astra` — T7 Corretor Pro Fase 1):** migration `0012_entitlements.sql` (`usage_counters` mensal atômico + `price_estimates.owner_user_id`), isolamento de produto em `assertOrgAccess` (AC-P1), consumo de cota em `/api/estimate` (AC-P2/AC-P3), `/api/me/entitlements`, `/conta/estimativas` (AC-P5), `AdSlot` condicional (AC-P4) e card Pro em `/precos` (AC-P6).
 - Banco de produção (Neon `imovi-prod`): só `0001` e `0002` estão aplicadas, sem `schema_migrations`, e o último scrape é de 11/06/2026. O G1 (staging) é pré-requisito de qualquer deploy.
 
 T2, T3 e T4 não compartilham arquivos de produto. O lockfile só pode mudar em T2.

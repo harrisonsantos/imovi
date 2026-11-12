@@ -33,7 +33,10 @@ export async function resolveScraperDeps(
   const userAgent = opts.userAgent ?? DEFAULT_USER_AGENT;
   const fetcher = opts.fetcher ?? new Fetcher({ userAgent });
   const limiter = opts.rateLimiter ?? new RateLimiter({ minIntervalMs: 1000 });
-  const policy = opts.robotsPolicy ?? (await fetchRobotsPolicy(host));
+  const policy =
+    opts.robotsPolicy ??
+    (await fetchRobotsPolicy(host, ((url: string | URL | Request, init?: RequestInit) =>
+      fetcher.get(String(url), init)) as typeof fetch));
   return { fetcher, limiter, policy, userAgent };
 }
 

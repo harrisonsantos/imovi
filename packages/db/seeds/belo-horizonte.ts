@@ -85,12 +85,10 @@ async function main(): Promise<void> {
       setWhere: sql`${neighborhoods.priceSource} <> 'observed_listings'`,
     });
 
-  // eslint-disable-next-line no-console
   console.log(`[seed:belo-horizonte] ${rows.length} bairros sincronizados.`);
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('[seed:belo-horizonte] falhou:', err);
   process.exit(1);
 });

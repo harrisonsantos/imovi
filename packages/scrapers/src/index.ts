@@ -17,5 +17,6 @@ export type { ParseContext } from './zap/parser.js';
 export {
   parseRobotsTxt,
   fetchRobotsPolicy,
+  clearRobotsPolicyCache,
   type RobotsPolicy,
 } from './core/robots.js';
