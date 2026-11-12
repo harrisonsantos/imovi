@@ -3,7 +3,7 @@
  * `file` (PDF/JPEG/PNG ≤ 10MB) e `imovelId` (uuid da org), grava o binário
  * no bucket R2 `MATRICULAS` e registra os metadados em audit_matriculas.
  *
- * Edge runtime: o arquivo vai pro R2 via stream (sem Buffer/node:*).
+ * O buffer validado vai para o R2 (sem Buffer/node:*, limitado a 10MB).
  */
 import { z } from 'zod';
 import { auditImoveisRepo, auditMatriculasRepo } from '@imovi/db/audit';
@@ -12,7 +12,7 @@ import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 import { buildMatriculaKey, validateMatriculaFile } from '@/lib/matricula';
 import { requireOrg, sessionGuard } from '@/lib/session';
-
+import { appUrlFromRequest, hasTrustedOrigin } from '@/lib/billing';
 
 const ImovelIdSchema = z.string().uuid();
 
@@ -23,6 +23,14 @@ interface MatriculaBindings {
 
 export async function POST(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();
+  if (
+    !hasTrustedOrigin(
+      req,
+      appUrlFromRequest(req, cfEnv.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_APP_URL),
+    )
+  ) {
+    return Response.json({ error: 'Invalid origin' }, { status: 403 });
+  }
   let orgId: string;
   let userId: string;
   try {
@@ -55,6 +63,12 @@ export async function POST(req: Request): Promise<Response> {
     return apiError(400, 'invalid_file', validation.error);
   }
 
+  const buffer = await file.arrayBuffer();
+  const contentValidation = validateMatriculaFile(file.type, file.size, new Uint8Array(buffer));
+  if (!contentValidation.ok) {
+    return apiError(400, 'invalid_file', contentValidation.error);
+  }
+
   const db = getDb(cfEnv.DATABASE_URL);
   // Imóvel precisa existir E pertencer à org da sessão (isolamento).
   const imovel = await auditImoveisRepo.findById(db, orgId, parsedId.data);
@@ -68,18 +82,23 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const key = buildMatriculaKey(orgId, imovel.id, file.name);
-  await bucket.put(key, file.stream(), {
+  await bucket.put(key, buffer, {
     httpMetadata: { contentType: file.type },
   });
 
-  const row = await auditMatriculasRepo.insert(db, orgId, {
-    imovelId: imovel.id,
-    r2Key: key,
-    fileName: file.name,
-    mime: file.type,
-    size: file.size,
-    uploadedBy: userId,
-  });
+  try {
+    const row = await auditMatriculasRepo.insert(db, orgId, {
+      imovelId: imovel.id,
+      r2Key: key,
+      fileName: file.name,
+      mime: file.type,
+      size: file.size,
+      uploadedBy: userId,
+    });
 
-  return Response.json({ id: row.id, r2Key: row.r2Key });
+    return Response.json({ id: row.id, r2Key: row.r2Key });
+  } catch (err) {
+    await bucket.delete(key).catch(() => undefined);
+    throw err;
+  }
 }

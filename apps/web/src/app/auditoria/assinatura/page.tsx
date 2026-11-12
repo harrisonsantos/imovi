@@ -12,12 +12,7 @@
 import Link from 'next/link';
 import { BillingButton } from '@/components/billing/BillingButton';
 import { tokens as C } from '@/lib/tokens';
-
-const TIERS = [
-  { id: 'audit-essencial' as const, name: 'Essencial', price: 149, limite: 'Até 5 corretores', highlight: false },
-  { id: 'audit-profissional' as const, name: 'Profissional', price: 299, limite: 'Até 15 corretores', highlight: true },
-  { id: 'audit-escala' as const, name: 'Escala', price: 499, limite: 'Corretores ilimitados', highlight: false },
-];
+import { BILLING_PLANS } from '@/lib/billing';
 
 const FEATURES = [
   'Integração Vista CRM',
@@ -53,15 +48,15 @@ export default function AssinaturaPage() {
 
       {/* Tiers compactos */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.75rem' }}>
-        {TIERS.map((t) => (
+        {BILLING_PLANS.map((t) => (
           <div
             key={t.name}
             style={{
               background: C.surface,
-              border: `1px solid ${t.highlight ? C.accentMid : C.border}`,
+              border: `1px solid ${t.id === 'audit-profissional' ? C.accentMid : C.border}`,
               borderRadius: '14px',
               padding: '1.25rem',
-              boxShadow: t.highlight ? `0 0 30px ${C.accentGlow}` : 'none',
+              boxShadow: t.id === 'audit-profissional' ? `0 0 30px ${C.accentGlow}` : 'none',
             }}
           >
             <div style={{ display: 'inline-flex', marginBottom: '0.75rem', padding: '2px 9px', borderRadius: '100px', background: C.accentDim, border: `1px solid ${C.accentMid}`, color: C.accent, fontSize: '0.5625rem', fontFamily: 'var(--font-mono)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
@@ -69,14 +64,14 @@ export default function AssinaturaPage() {
             </div>
             <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: C.text, marginBottom: '0.375rem' }}>{t.name}</h2>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.5rem', fontWeight: 500, letterSpacing: '-0.03em', color: C.text }}>
-              R$&nbsp;{t.price}
+              R$&nbsp;{t.priceMonthly}
               <span style={{ fontSize: '0.8125rem', color: C.text2 }}>/mês</span>
             </div>
-            <div style={{ fontSize: '0.6875rem', fontFamily: 'var(--font-mono)', color: C.accent, marginTop: '0.25rem', marginBottom: '0.875rem' }}>{t.limite}</div>
+            <div style={{ fontSize: '0.6875rem', fontFamily: 'var(--font-mono)', color: C.accent, marginTop: '0.25rem', marginBottom: '0.875rem' }}>{t.maxCorretores === null ? 'Acima de 15 corretores' : `Até ${t.maxCorretores} corretores`}</div>
             <BillingButton
               planId={t.id}
               label={`Assinar ${t.name}`}
-              highlighted={t.highlight}
+              highlighted={t.id === 'audit-profissional'}
             />
           </div>
         ))}

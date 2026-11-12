@@ -18,10 +18,12 @@ const EXPECTED_MIGRATIONS = [
   '0006_billing.sql',
   '0007_stabilization.sql',
   '0008_terms_acceptance.sql',
+  '0010_account_anonymization.sql',
+  '0011_invitation_created_at.sql',
 ] as const;
 
 describe('reconciliação de migrations legadas (Gate G1 — imovi-prod sem schema_migrations)', () => {
-  it('reconcilia banco com 0001 e 0002 aplicadas manualmente sem schema_migrations, registra 0001..0008 com SHA-256 e é no-op na 2ª execução', async () => {
+  it('reconcilia banco com 0001 e 0002 aplicadas manualmente sem schema_migrations, registra 0001..0011 com SHA-256 e é no-op na 2ª execução', async () => {
     const pg = new PGlite();
     await pg.waitReady;
 
@@ -71,11 +73,11 @@ describe('reconciliação de migrations legadas (Gate G1 — imovi-prod sem sche
       expect(firstRun.applied).toEqual([...EXPECTED_MIGRATIONS]);
       expect(firstRun.skipped).toEqual([]);
 
-      // c) Verifica que todas as 8 versões ficam registradas com checksum SHA-256 válido.
+      // c) Verifica que todas as 10 versões ficam registradas com checksum SHA-256 válido.
       const recorded = await pg.query<{ name: string; checksum: string; applied_at: Date }>(
         `SELECT name, checksum, applied_at FROM schema_migrations ORDER BY name`,
       );
-      expect(recorded.rows).toHaveLength(8);
+      expect(recorded.rows).toHaveLength(EXPECTED_MIGRATIONS.length);
 
       for (const [idx, file] of EXPECTED_MIGRATIONS.entries()) {
         const content = await readFile(join(MIGRATIONS_DIR, file), 'utf8');

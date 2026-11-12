@@ -16,6 +16,29 @@ import {
 } from '../src/lib/matricula';
 
 describe('validateMatriculaFile', () => {
+  const signatures = [
+    ['application/pdf', [0x25, 0x50, 0x44, 0x46, 0x2d]],
+    ['image/jpeg', [0xff, 0xd8, 0xff]],
+    ['image/png', [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+  ] as const;
+
+  it.each(signatures)('confere assinatura de %s', (mime, signature) => {
+    const bytes = new Uint8Array([...signature, 0, 1]);
+    expect(validateMatriculaFile(mime, bytes.length, bytes).ok).toBe(true);
+    expect(validateMatriculaFile(mime, 20, new TextEncoder().encode('<html>fake</html>')).ok).toBe(
+      false,
+    );
+    expect(validateMatriculaFile(mime, 1, new Uint8Array(signature.slice(0, -1))).ok).toBe(false);
+    expect(validateMatriculaFile(mime, 1, new Uint8Array()).ok).toBe(false);
+    for (const [otherMime, otherSignature] of signatures) {
+      if (otherMime !== mime) {
+        expect(
+          validateMatriculaFile(mime, otherSignature.length, new Uint8Array(otherSignature)).ok,
+        ).toBe(false);
+      }
+    }
+  });
+
   it('aceita pdf/jpeg/png dentro do limite', () => {
     for (const mime of MATRICULA_ALLOWED_MIMES) {
       expect(validateMatriculaFile(mime, 1024)).toEqual({ ok: true });

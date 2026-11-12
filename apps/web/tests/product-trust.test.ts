@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { BILLING_PLANS } from '../src/lib/billing';
 import PrecosPage from '../src/app/precos/page';
+import AssinaturaPage from '../src/app/auditoria/assinatura/page';
 import { metadata as precosMetadata } from '../src/app/precos/layout';
 import DashboardPage from '../src/app/dashboard/page';
 import { metadata as dashboardMetadata } from '../src/app/dashboard/layout';
@@ -35,6 +36,23 @@ function withoutComingSoon(markup: string): string {
 }
 
 const FUTURE_FEATURES = /PDF|\bAPI\b|comparáve|histórico|ilimitad/i;
+
+describe('/auditoria/assinatura respeita os planos públicos', () => {
+  it('não promete corretores ilimitados e usa preços e limites do servidor', () => {
+    const page = text(html(AssinaturaPage));
+    expect(page).not.toMatch(/ilimitad/i);
+    expect(JSON.stringify(BILLING_PLANS)).not.toMatch(/ilimitad/i);
+    for (const plan of BILLING_PLANS) {
+      expect(page).toContain(plan.name);
+      expect(page).toContain(`R$ ${plan.priceMonthly} /mês`);
+      expect(page).toContain(
+        plan.maxCorretores === null
+          ? 'Acima de 15 corretores'
+          : `Até ${plan.maxCorretores} corretores`,
+      );
+    }
+  });
+});
 
 describe('/precos vende apenas o que está entregue', () => {
   const page = html(PrecosPage);

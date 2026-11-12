@@ -1,10 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import {
   getBillingPlan,
+  hasTrustedOrigin,
   mapStripeStatus,
   parseStripeSignature,
   verifyStripeSignature,
 } from '../src/lib/billing';
+
+describe('hasTrustedOrigin', () => {
+  it.each([undefined, 'null', 'https://evil.test', 'http://localhost:3001'])(
+    'rejeita origin %s',
+    (origin) => {
+      const req = new Request('http://localhost:3000/api/test', {
+        headers: origin === undefined ? {} : { origin },
+      });
+      expect(hasTrustedOrigin(req, 'http://localhost:3000')).toBe(false);
+    },
+  );
+
+  it('aceita a origem exata da URL configurada', () => {
+    const req = new Request('http://localhost:3000/api/test', {
+      headers: { origin: 'http://localhost:3000' },
+    });
+    expect(hasTrustedOrigin(req, 'http://localhost:3000/')).toBe(true);
+  });
+});
 
 describe('billing plans', () => {
   it('aceita somente planos públicos conhecidos', () => {

@@ -10,6 +10,8 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestDb, type TestDb } from './setup.js';
+import { orgRepo } from '../src/repositories/orgs.js';
+import { sql } from 'drizzle-orm';
 import {
   auditCorretoresRepo,
   auditImoveisRepo,
@@ -30,6 +32,33 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await t.dispose();
+});
+
+describe('orgRepo.listActiveForAudit', () => {
+  it('inclui active/past_due e trials válidos; exclui expirados e outros status', async () => {
+    await t.raw.exec(`
+      INSERT INTO organizations (id, name, status, trial_ends_at) VALUES
+        ('active', 'Active', 'active', NOW() - INTERVAL '1 day'),
+        ('past-due', 'Past due', 'past_due', NOW() - INTERVAL '1 day'),
+        ('trial-null', 'No deadline', 'trial', NULL),
+        ('trial-future', 'Future', 'trial', NOW() + INTERVAL '1 day'),
+        ('trial-expired', 'Expired', 'trial', NOW() - INTERVAL '1 day'),
+        ('suspended', 'Suspended', 'suspended', NULL),
+        ('pending', 'Pending', 'pending', NULL);
+    `);
+    // Mesma transação para testar o limite exato de NOW(), sem relógio instável.
+    await t.db.transaction(async (tx) => {
+      await tx.execute(sql`INSERT INTO organizations (id, name, status, trial_ends_at)
+        VALUES ('trial-now', 'Deadline now', 'trial', NOW())`);
+      const rows = await orgRepo.listActiveForAudit(tx);
+      expect(rows.map((org) => org.id).sort()).toEqual([
+        'active',
+        'past-due',
+        'trial-future',
+        'trial-null',
+      ]);
+    });
+  });
 });
 
 describe('auditCorretoresRepo', () => {
@@ -642,9 +671,13 @@ describe('auditImoveisRepo — findById e setMatriculaVerificada (fluxo matrícu
 
     // Org errada não altera.
     await auditImoveisRepo.setMatriculaVerificada(t.db, ORG_B, imovel.id, true);
-    expect((await auditImoveisRepo.findById(t.db, ORG_A, imovel.id))?.matriculaVerificada).toBe(false);
+    expect((await auditImoveisRepo.findById(t.db, ORG_A, imovel.id))?.matriculaVerificada).toBe(
+      false,
+    );
 
     await auditImoveisRepo.setMatriculaVerificada(t.db, ORG_A, imovel.id, true);
-    expect((await auditImoveisRepo.findById(t.db, ORG_A, imovel.id))?.matriculaVerificada).toBe(true);
+    expect((await auditImoveisRepo.findById(t.db, ORG_A, imovel.id))?.matriculaVerificada).toBe(
+      true,
+    );
   });
 });
