@@ -52,8 +52,8 @@ export function buildCheckoutRequest(input: {
     mode: 'subscription',
     'line_items[0][price]': input.priceId,
     'line_items[0][quantity]': '1',
-    success_url: `${input.appUrl}/auditoria/assinatura?checkout=success`,
-    cancel_url: `${input.appUrl}/auditoria/assinatura?checkout=cancelled`,
+    success_url: `${input.appUrl}${input.plan.product === 'corretor_pro' ? '/conta/estimativas' : '/auditoria/assinatura'}?checkout=success`,
+    cancel_url: `${input.appUrl}${input.plan.product === 'corretor_pro' ? '/conta/estimativas' : '/auditoria/assinatura'}?checkout=cancelled`,
     client_reference_id: input.organizationId,
     'metadata[organization_id]': input.organizationId,
     'metadata[plan_id]': input.plan.id,
@@ -90,13 +90,14 @@ export async function createPortalSession(input: {
   secretKey: string;
   customerId: string;
   appUrl: string;
+  returnPath?: '/conta/estimativas' | '/auditoria/assinatura';
 }): Promise<StripeSession> {
   return stripePost<StripeSession>(
     input.secretKey,
     'billing_portal/sessions',
     new URLSearchParams({
       customer: input.customerId,
-      return_url: `${input.appUrl}/auditoria/assinatura`,
+      return_url: `${input.appUrl}${input.returnPath ?? '/auditoria/assinatura'}`,
     }),
   );
 }

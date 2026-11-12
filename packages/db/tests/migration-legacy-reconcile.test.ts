@@ -20,10 +20,11 @@ const EXPECTED_MIGRATIONS = [
   '0008_terms_acceptance.sql',
   '0010_account_anonymization.sql',
   '0011_invitation_created_at.sql',
+  '0012_entitlements.sql',
 ] as const;
 
 describe('reconciliação de migrations legadas (Gate G1 — imovi-prod sem schema_migrations)', () => {
-  it('reconcilia banco com 0001 e 0002 aplicadas manualmente sem schema_migrations, registra 0001..0011 com SHA-256 e é no-op na 2ª execução', async () => {
+  it('reconcilia banco com 0001 e 0002 aplicadas manualmente sem schema_migrations, registra 0001..0012 com SHA-256 e é no-op na 2ª execução', async () => {
     const pg = new PGlite();
     await pg.waitReady;
 
@@ -73,7 +74,7 @@ describe('reconciliação de migrations legadas (Gate G1 — imovi-prod sem sche
       expect(firstRun.applied).toEqual([...EXPECTED_MIGRATIONS]);
       expect(firstRun.skipped).toEqual([]);
 
-      // c) Verifica que todas as 10 versões ficam registradas com checksum SHA-256 válido.
+      // c) Verifica que todas as versões ficam registradas com checksum SHA-256 válido.
       const recorded = await pg.query<{ name: string; checksum: string; applied_at: Date }>(
         `SELECT name, checksum, applied_at FROM schema_migrations ORDER BY name`,
       );
@@ -94,10 +95,10 @@ describe('reconciliação de migrations legadas (Gate G1 — imovi-prod sem sche
       const citiesCount = await pg.query<{ slug: string }>(`SELECT slug FROM cities`);
       expect(citiesCount.rows).toEqual([{ slug: 'curitiba-pr' }]);
 
-      const snapshotAfter = await pg.query<{ property_id: string | null; operation: string | null }>(
-        `SELECT property_id, operation FROM listing_snapshots WHERE listing_id = $1`,
-        [listingId],
-      );
+      const snapshotAfter = await pg.query<{
+        property_id: string | null;
+        operation: string | null;
+      }>(`SELECT property_id, operation FROM listing_snapshots WHERE listing_id = $1`, [listingId]);
       expect(snapshotAfter.rows).toEqual([{ property_id: propertyId, operation: 'sale' }]);
 
       for (const table of [
@@ -110,10 +111,9 @@ describe('reconciliação de migrations legadas (Gate G1 — imovi-prod sem sche
         'api_rate_limits',
         'terms_acceptances',
       ]) {
-        const reg = await pg.query<{ reg: string | null }>(
-          `SELECT to_regclass($1) AS reg`,
-          [`public.${table}`],
-        );
+        const reg = await pg.query<{ reg: string | null }>(`SELECT to_regclass($1) AS reg`, [
+          `public.${table}`,
+        ]);
         expect(reg.rows[0]?.reg).toBe(table);
       }
 

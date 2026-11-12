@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../../../packages/db/tests/setup.js';
 const state = vi.hoisted(() => ({ db: null as unknown }));
 vi.mock('../src/lib/db.js', () => ({ getDb: () => state.db }));
@@ -17,6 +17,9 @@ const env: AuthEnv = {
 };
 let testDb: TestDb;
 let verificationUrl = '';
+beforeEach(() => {
+  verificationUrl = '';
+});
 beforeAll(async () => {
   testDb = await createTestDb();
   state.db = testDb.db;
@@ -48,6 +51,55 @@ function post(path: string, body: unknown, cookie?: string) {
   );
 }
 describe('verified identity onboarding with the real auth adapter', () => {
+  it('creates an individual Pro organization pending payment and prevents invitations or forged paid rights', async () => {
+    const credentials = {
+      name: 'Corretor',
+      email: 'corretor@example.test',
+      password: 'fixture-password-123',
+    };
+    expect((await post('sign-up/email', buildSignupBody(credentials))).status).toBe(200);
+    await getAuth(env).handler(new Request(verificationUrl));
+    const login = await post('sign-in/email', credentials);
+    const cookie = login.headers.get('set-cookie')?.split(';')[0];
+    expect(cookie).toBeTruthy();
+    const response = await post(
+      'organization/create',
+      {
+        name: 'Conta individual',
+        slug: 'corretor-pro-fixture',
+        metadata: { product: 'corretor_pro' },
+        plan: 'audit-escala',
+        status: 'active',
+      },
+      cookie,
+    );
+    expect(response.status).toBe(200);
+    const created = (await response.json()) as { id: string };
+    const rows = await testDb.raw.query(
+      'SELECT plan, status, max_corretores, trial_ends_at FROM organizations WHERE id = $1',
+      [created.id],
+    );
+    expect(rows.rows[0]).toMatchObject({
+      plan: 'corretor_pro',
+      status: 'pending',
+      max_corretores: 1,
+      trial_ends_at: null,
+    });
+    expect(
+      (
+        await post(
+          'organization/invite-member',
+          { organizationId: created.id, email: 'extra@example.test', role: 'member' },
+          cookie,
+        )
+      ).status,
+    ).toBeGreaterThanOrEqual(400);
+    const memberCount = await testDb.raw.query<{ count: number }>(
+      'SELECT count(*)::int AS count FROM members WHERE organization_id = $1',
+      [created.id],
+    );
+    expect(memberCount.rows[0]?.count).toBe(1);
+  });
   it('creates a verified owner organization only after consuming the email confirmation', async () => {
     const credentials = {
       name: 'Owner',

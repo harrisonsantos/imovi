@@ -11,7 +11,11 @@ const mocks = vi.hoisted(() => ({
   find: vi.fn(),
   register: vi.fn(),
   select: vi.fn(),
+  access: vi.fn(),
+  quota: vi.fn(),
 }));
+vi.mock('@/lib/entitlements', () => ({ resolveEstimateAccess: mocks.access }));
+vi.mock('@imovi/db/rate-limit', () => ({ usageCounterRepo: { consumeMonthlyQuota: mocks.quota } }));
 vi.mock('@/lib/cf-env', () => ({ getCfEnv: mocks.env }));
 vi.mock('@/lib/db', () => ({ getDb: mocks.db }));
 vi.mock('@imovi/db/estimates', () => ({
@@ -66,6 +70,14 @@ function saved() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.access.mockResolvedValue({ session: null, org: null, plan: null });
+  mocks.quota.mockResolvedValue({
+    allowed: true,
+    count: 1,
+    remaining: 99,
+    limit: 100,
+    renewsAt: new Date('2027-01-01Z'),
+  });
   mocks.env.mockResolvedValue({
     NODE_ENV: 'production',
     TURNSTILE_SECRET: 'binding-secret',
@@ -74,17 +86,15 @@ beforeEach(() => {
   mocks.consume.mockResolvedValue({ allowed: true, retryAfterSeconds: 60 });
   mocks.verify.mockResolvedValue(true);
   mocks.city.mockResolvedValue({ active: true });
-  const limit = vi
-    .fn()
-    .mockResolvedValue([
-      {
-        name: 'Batel',
-        medianPriceM2: '10000',
-        listingCount: 0,
-        lastAggregatedAt: null,
-        priceSource: 'seed_reference',
-      },
-    ]);
+  const limit = vi.fn().mockResolvedValue([
+    {
+      name: 'Batel',
+      medianPriceM2: '10000',
+      listingCount: 0,
+      lastAggregatedAt: null,
+      priceSource: 'seed_reference',
+    },
+  ]);
   mocks.select.mockReturnValue({ from: () => ({ where: () => ({ limit }) }) });
   mocks.db.mockReturnValue({ select: mocks.select });
   mocks.record.mockImplementation(async (_db: unknown, row: Record<string, unknown>) => ({
@@ -96,6 +106,58 @@ beforeEach(() => {
 });
 
 describe('POST estimate', () => {
+  it('uses authenticated Pro instead of Turnstile, retaining minute protection and ownership', async () => {
+    mocks.access.mockResolvedValue({
+      session: { userId: 'alice' },
+      org: { id: 'pro' },
+      plan: { entitlements: { monthlyEstimatesQuota: 100 } },
+    });
+    mocks.env.mockResolvedValue({ NODE_ENV: 'production', DATABASE_URL: 'unused' });
+    const response = await estimate(request({ ...payload, turnstileToken: undefined }));
+    expect(response.status).toBe(200);
+    expect(mocks.verify).not.toHaveBeenCalled();
+    expect(mocks.consume).toHaveBeenCalled();
+    expect(mocks.quota).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orgId: 'pro', metric: 'estimates', limit: 100 }),
+    );
+    expect(mocks.record).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ ownerUserId: 'alice' }),
+    );
+  });
+  it('returns 402 on exhausted quota and never falls back to anonymous', async () => {
+    mocks.access.mockResolvedValue({
+      session: { userId: 'alice' },
+      org: { id: 'pro' },
+      plan: { entitlements: { monthlyEstimatesQuota: 100 } },
+    });
+    mocks.quota.mockResolvedValue({
+      allowed: false,
+      limit: 100,
+      renewsAt: new Date('2027-01-01Z'),
+    });
+    const response = await estimate(request());
+    expect(response.status).toBe(402);
+    expect(await response.json()).toMatchObject({
+      error: 'quota_exceeded',
+      limit: 100,
+      renewsAt: '2027-01-01T00:00:00.000Z',
+    });
+    expect(mocks.verify).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
+  it('does not consume quota for invalid input or a minute limit rejection', async () => {
+    mocks.access.mockResolvedValue({
+      session: { userId: 'alice' },
+      org: { id: 'pro' },
+      plan: { entitlements: { monthlyEstimatesQuota: 100 } },
+    });
+    expect((await estimate(request({ ...payload, area: 0 }))).status).toBe(400);
+    mocks.consume.mockResolvedValue({ allowed: false, retryAfterSeconds: 5 });
+    expect((await estimate(request())).status).toBe(429);
+    expect(mocks.quota).not.toHaveBeenCalled();
+  });
   it('fails closed if production anti-bot or trusted IP configuration is missing', async () => {
     mocks.env.mockResolvedValue({ NODE_ENV: 'production' });
     expect((await estimate(request())).status).toBe(503);

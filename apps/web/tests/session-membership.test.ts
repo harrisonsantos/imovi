@@ -15,6 +15,7 @@ import {
   requireOrgIdentity,
   requireOrgAdminIdentity,
   requireOrgAdmin,
+  requireOrg,
 } from '../src/lib/session.js';
 const request = new Request('https://imovi.test/api');
 beforeEach(() => {
@@ -28,6 +29,20 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe('organization guards', () => {
+  it('rejects Corretor Pro from audit routes, including past_due and trial (AC-P1)', async () => {
+    for (const status of ['active', 'past_due', 'trial', 'suspended', 'canceled']) {
+      mocks.findById.mockResolvedValue({
+        id: 'org-a',
+        plan: 'corretor_pro',
+        status,
+        trialEndsAt: new Date('2099-01-01Z'),
+      });
+      await expect(requireOrg(request)).rejects.toMatchObject({
+        status: 403,
+        code: 'product_required',
+      });
+    }
+  });
   it('checks user and active organization against current membership on every request', async () => {
     expect((await requireOrgIdentity(request)).org.id).toBe('org-a');
     expect(mocks.findByUserAndOrg).toHaveBeenCalledWith({}, 'user', 'org-a');

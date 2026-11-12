@@ -4,7 +4,6 @@ import { appUrlFromRequest, hasTrustedOrigin } from '@/lib/billing';
 import { requireOrgAdminIdentity, sessionGuard } from '@/lib/session';
 import { createPortalSession } from '@/lib/stripe-edge';
 
-
 export async function POST(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();
   const appUrl = appUrlFromRequest(
@@ -26,6 +25,7 @@ export async function POST(req: Request): Promise<Response> {
       secretKey,
       customerId: info.org.stripeCustomerId,
       appUrl,
+      returnPath: info.org.plan === 'corretor_pro' ? '/conta/estimativas' : '/auditoria/assinatura',
     });
     if (!session.url) return apiError(502, 'stripe_error', 'Portal sem URL de redirecionamento.');
     return Response.json({ url: session.url });

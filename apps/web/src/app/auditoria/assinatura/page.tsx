@@ -48,7 +48,7 @@ export default function AssinaturaPage() {
 
       {/* Tiers compactos */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.75rem' }}>
-        {BILLING_PLANS.map((t) => (
+        {BILLING_PLANS.filter((plan) => plan.product === 'audit').map((t) => (
           <div
             key={t.name}
             style={{

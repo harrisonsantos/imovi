@@ -26,11 +26,19 @@ export const orgRepo: OrgRepo = {
       .select()
       .from(organizations)
       .where(
-        or(
-          inArray(organizations.status, ['active', 'past_due']),
-          and(
-            eq(organizations.status, 'trial'),
-            or(isNull(organizations.trialEndsAt), gt(organizations.trialEndsAt, sql`NOW()`)),
+        and(
+          inArray(organizations.plan, [
+            'trial',
+            'audit-essencial',
+            'audit-profissional',
+            'audit-escala',
+          ]),
+          or(
+            inArray(organizations.status, ['active', 'past_due']),
+            and(
+              eq(organizations.status, 'trial'),
+              or(isNull(organizations.trialEndsAt), gt(organizations.trialEndsAt, sql`NOW()`)),
+            ),
           ),
         ),
       );

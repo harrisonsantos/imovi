@@ -18,3 +18,4 @@ export { modelVersionRepo, type ModelVersionRepo } from './repositories/model-ve
 export { scrapeErrorRepo, type ScrapeErrorRepo } from './repositories/scrape-errors.js';
 export type { AnyDbClient } from './repositories/types.js';
 export { accountRepo, AccountAnonymizationError } from './repositories/members.js';
+export { usageCounterRepo } from './repositories/usage-counters.js';

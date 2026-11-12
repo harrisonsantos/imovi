@@ -1,6 +1,8 @@
 import { eq, lt, sql } from 'drizzle-orm';
 import { apiRateLimits } from '../schema.js';
 import type { AnyDbClient } from './types.js';
+// Available through the existing edge-safe package subpath.
+export { usageCounterRepo } from './usage-counters.js';
 
 export interface RateLimitResult {
   allowed: boolean;

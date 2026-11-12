@@ -25,6 +25,7 @@ vi.mock('@/lib/cf-env', () => ({
     NEXT_PUBLIC_APP_URL: 'https://imovi.test',
     STRIPE_PRICE_AUDIT_ESSENCIAL: 'price_fixture',
     STRIPE_PRICE_AUDIT_PROFISSIONAL: 'price_professional',
+    STRIPE_PRICE_CORRETOR_PRO: 'price_corretor',
   }),
   authEnvOf: () => ({}),
 }));
@@ -105,6 +106,68 @@ beforeEach(() => {
   });
 });
 describe('billing webhook route', () => {
+  it('returns Pro subscribers from the billing portal to their account', async () => {
+    mocks.requireOrgAdminIdentity.mockResolvedValue({
+      org: { ...org, plan: 'corretor_pro' },
+      email: 'owner@imovi.test',
+    });
+    mocks.createPortalSession.mockResolvedValue({ url: 'https://billing.stripe.test/pro' });
+    const response = await portal(
+      new Request('https://imovi.test/api/billing/portal', {
+        method: 'POST',
+        headers: { origin: 'https://imovi.test' },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.createPortalSession).toHaveBeenCalledWith(
+      expect.objectContaining({ returnPath: '/conta/estimativas' }),
+    );
+  });
+  it('reconciles Corretor Pro by Stripe price and handles duplicate delivery (AC-P7)', async () => {
+    mocks.retrieveSubscription.mockResolvedValue({
+      id: 'sub_org',
+      customer: 'cus_org',
+      status: 'active',
+      metadata: { organization_id: 'org' },
+      items: { data: [{ price: { id: 'price_corretor' } }] },
+    });
+    expect((await webhook(await eventRequest('customer.subscription.updated'))).status).toBe(200);
+    expect(mocks.completeEvent).toHaveBeenCalledWith(
+      {},
+      'evt_fixture',
+      expect.any(String),
+      expect.objectContaining({ plan: 'corretor_pro', maxCorretores: 1, status: 'active' }),
+      expect.any(Date),
+    );
+    mocks.claimEvent.mockResolvedValue('processed');
+    expect(
+      await (await webhook(await eventRequest('customer.subscription.updated'))).json(),
+    ).toMatchObject({ duplicate: true });
+    expect(mocks.completeEvent).toHaveBeenCalledTimes(1);
+  });
+  it('checks out Corretor Pro with an account return URL', async () => {
+    mocks.createCheckoutSession.mockResolvedValue({
+      id: 'cs_pro',
+      url: 'https://checkout.stripe.test/pro',
+    });
+    const response = await checkout(
+      new Request('https://imovi.test/api/billing/checkout', {
+        method: 'POST',
+        headers: { origin: 'https://imovi.test' },
+        body: JSON.stringify({ planId: 'corretor_pro' }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.createCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          'line_items[0][price]': 'price_corretor',
+          'metadata[plan_id]': 'corretor_pro',
+          success_url: 'https://imovi.test/conta/estimativas?checkout=success',
+        }),
+      }),
+    );
+  });
   it('replaces a canceled subscription using an expected checkout even while the DB status is active', async () => {
     const pending = {
       ...org,
