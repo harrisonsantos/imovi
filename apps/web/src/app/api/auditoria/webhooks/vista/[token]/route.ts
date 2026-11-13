@@ -10,10 +10,10 @@ import { vistaWebhookSchema } from '@imovi/audit/vista';
 import { processVistaEvent } from '@imovi/audit/ingest';
 import { orgVistaConfigRepo } from '@imovi/db/audit';
 import { orgRepo } from '@imovi/db/orgs';
+import { getCfEnv } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
-
-export const runtime = 'edge';
+import { assertOrgProduct, sessionGuard } from '@/lib/session';
 
 export async function POST(
   req: Request,
@@ -21,13 +21,7 @@ export async function POST(
 ): Promise<Response> {
   const { token } = await ctx.params;
 
-  const { getRequestContext } = await import('@cloudflare/next-on-pages');
-  let cfEnv: Record<string, string> = {};
-  try {
-    cfEnv = getRequestContext().env as Record<string, string>;
-  } catch {
-    // fora do runtime CF (dev puro/testes) — getDb cai em process.env
-  }
+  const cfEnv = await getCfEnv();
 
   let db;
   try {
@@ -47,6 +41,12 @@ export async function POST(
   // dashboard é bloqueado pelo gate em requireOrg. O limite de corretores do
   // plano é aplicado como aviso (warn, don't drop) via maxCorretores abaixo.
   const org = await orgRepo.findById(db, config.orgId);
+  if (!org) return apiError(404, 'not_found', 'Webhook não encontrado.');
+  try {
+    assertOrgProduct(org);
+  } catch (error) {
+    return sessionGuard(error);
+  }
 
   let json: unknown;
   try {

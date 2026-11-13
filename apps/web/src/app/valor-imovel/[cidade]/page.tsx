@@ -7,7 +7,6 @@ import { getSeoCity } from '@/lib/seo-data';
 import { SITE_URL } from '@/lib/seo';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 type Props = { params: Promise<{ cidade: string }> };
@@ -44,7 +43,9 @@ export default async function CidadePage({ params }: Props) {
   const ordered = [...city.indexableNeighborhoods].sort(
     (a, b) => b.medianPriceM2 - a.medianPriceM2,
   );
-  const updated = city.lastAggregatedAt?.toLocaleDateString('pt-BR') ?? 'data recente';
+  const updated =
+    city.lastAggregatedAt?.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) ??
+    'data não disponível';
 
   return (
     <SeoPageShell
@@ -178,7 +179,7 @@ export default async function CidadePage({ params }: Props) {
           ],
           [
             'Mediana não é avaliação final',
-            'O preço por m² do bairro é uma referência inicial. O avaliador combina esse contexto com as características informadas e apresenta um intervalo de confiança.',
+            'O preço por m² do bairro é uma referência inicial. A heurística combina esse contexto com as características informadas e apresenta uma margem fixa indicativa de ±30%, sem confiança estatística validada.',
           ],
           [
             'Como usar os dados',

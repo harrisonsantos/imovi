@@ -1,6 +1,8 @@
 import type { NormalizedAddress } from '@imovi/shared';
+import { z } from 'zod';
 import { IptuRecordSchema, type IptuRecord } from '../types.js';
 import { noopLogger, type Logger } from '../logger.js';
+import { cadastralNumber, fiscalNumber, fiscalYear } from './normalize-iptu.js';
 
 /** Config para instanciar o adapter da InfoSimples. */
 export interface InfoSimplesConfig {
@@ -15,8 +17,7 @@ export interface InfoSimplesConfig {
   fetchFn?: typeof fetch;
 }
 
-const DEFAULT_ENDPOINT =
-  'https://api.infosimples.com/api/v2/consultas/pref-sp-sao-paulo-valor-ref';
+const DEFAULT_ENDPOINT = 'https://api.infosimples.com/api/v2/consultas/pref-sp-sao-paulo-valor-ref';
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /**
@@ -35,7 +36,6 @@ export class InfoSimplesAdapter {
     this.endpoint = config.endpoint ?? DEFAULT_ENDPOINT;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.logger = config.logger ?? noopLogger;
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     this.fetchFn = config.fetchFn ?? globalThis.fetch;
   }
 
@@ -44,10 +44,7 @@ export class InfoSimplesAdapter {
    * Retorna `IptuRecord` em sucesso, ou `null` em qualquer falha
    * (rate limit 429, timeout, JSON malformado, schema inválido, etc.).
    */
-  async getIptu(
-    address: NormalizedAddress,
-    taxYear: number,
-  ): Promise<IptuRecord | null> {
+  async getIptu(address: NormalizedAddress, taxYear: number): Promise<IptuRecord | null> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
@@ -56,6 +53,7 @@ export class InfoSimplesAdapter {
     try {
       const response = await this.fetchFn(this.endpoint, {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.token}`,
@@ -85,19 +83,15 @@ export class InfoSimplesAdapter {
       let json: unknown;
       try {
         json = await response.json();
-      } catch (err) {
-        this.logger.error('infosimples: JSON malformado', {
-          error: (err as Error).message,
-        });
+      } catch {
+        this.logger.error('infosimples: JSON malformado');
         return null;
       }
 
       const mapped = this.mapResponse(json, taxYear);
       const parsed = IptuRecordSchema.safeParse(mapped);
       if (!parsed.success) {
-        this.logger.error('infosimples: resposta falhou validação', {
-          issues: parsed.error.issues,
-        });
+        this.logger.error('infosimples: resposta falhou validação');
         return null;
       }
       return parsed.data;
@@ -107,7 +101,7 @@ export class InfoSimplesAdapter {
         this.logger.warn('infosimples: timeout', { timeoutMs: this.timeoutMs });
         return null;
       }
-      this.logger.error('infosimples: erro inesperado', { error: e.message });
+      this.logger.error('infosimples: erro inesperado');
       return null;
     } finally {
       clearTimeout(timeoutId);
@@ -120,34 +114,30 @@ export class InfoSimplesAdapter {
    * { data: [{ valor_venal: "123456.78", iptu_valor_total: "987.65",
    *   numero_cadastro: "...", exercicio: 2026 }] }
    */
-  private mapResponse(json: unknown, taxYear: number): Partial<IptuRecord> {
-    const root = json as {
-      data?: Array<{
-        valor_venal?: string | number | null;
-        iptu_valor_total?: string | number | null;
-        numero_cadastro?: string;
-        exercicio?: number;
-      }>;
+  protected mapResponse(json: unknown, taxYear: number): Partial<IptuRecord> | null {
+    const parsed = z
+      .object({
+        code: z.literal(200).optional(),
+        data: z
+          .array(
+            z.object({
+              valor_venal: fiscalNumber,
+              iptu_valor_total: fiscalNumber,
+              numero_cadastro: cadastralNumber,
+              exercicio: fiscalYear,
+            }),
+          )
+          .length(1),
+      })
+      .safeParse(json);
+    const row = parsed.success ? parsed.data.data[0] : undefined;
+    if (!row || row.exercicio !== taxYear) return null;
+    const fiscal = {
+      taxYear: row.exercicio,
+      assessedValue: row.valor_venal,
+      iptuAmount: row.iptu_valor_total,
+      cadastralNumber: row.numero_cadastro,
     };
-    const first = root.data?.[0];
-    const assessed = toNumberOrNull(first?.valor_venal);
-    const iptu = toNumberOrNull(first?.iptu_valor_total);
-
-    return {
-      source: 'infosimples',
-      taxYear: first?.exercicio ?? taxYear,
-      assessedValue: assessed,
-      iptuAmount: iptu,
-      cadastralNumber: first?.numero_cadastro,
-      rawPayload: json,
-      fetchedAt: new Date(),
-    };
+    return { source: 'infosimples', ...fiscal, rawPayload: fiscal, fetchedAt: new Date() };
   }
-}
-
-function toNumberOrNull(v: unknown): number | null {
-  if (v === null || v === undefined) return null;
-  const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return n;
 }

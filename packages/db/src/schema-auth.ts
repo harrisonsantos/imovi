@@ -12,8 +12,10 @@ import {
   integer,
   boolean,
   timestamp,
+  jsonb,
   uniqueIndex,
   index,
+  uuid,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable(
@@ -24,6 +26,7 @@ export const users = pgTable(
     email: text('email').notNull(),
     emailVerified: boolean('email_verified').notNull().default(false),
     image: text('image'),
+    anonymizedAt: timestamp('anonymized_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -112,6 +115,14 @@ export const organizations = pgTable(
     }),
     cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
     billingUpdatedAt: timestamp('billing_updated_at', { withTimezone: true }),
+    billingLastEventCreatedAt: timestamp('billing_last_event_created_at', { withTimezone: true }),
+    billingLeaseToken: text('billing_lease_token'),
+    billingLeaseExpiresAt: timestamp('billing_lease_expires_at', { withTimezone: true }),
+    billingCheckoutToken: text('billing_checkout_token'),
+    billingCheckoutPlanId: text('billing_checkout_plan_id'),
+    billingCheckoutSessionId: text('billing_checkout_session_id'),
+    billingCheckoutExpiresAt: timestamp('billing_checkout_expires_at', { withTimezone: true }),
+    billingCheckoutRequest: jsonb('billing_checkout_request').$type<Record<string, string>>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -127,7 +138,13 @@ export const organizations = pgTable(
 export const billingEvents = pgTable('billing_events', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),
-  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+  payload: jsonb('payload').$type<Record<string, unknown>>(),
+  status: text('status').notNull().default('pending'),
+  leaseToken: text('lease_token'),
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
 });
 
 export const members = pgTable(
@@ -163,10 +180,33 @@ export const invitations = pgTable(
     inviterId: text('inviter_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     orgIdx: index('invitations_org_idx').on(t.organizationId),
     emailIdx: index('invitations_email_idx').on(t.email),
+  }),
+);
+
+/**
+ * Trilha de aceite dos Termos de uso e da Política de privacidade (0008).
+ * Uma linha por usuário e versão dos termos; versões novas acumulam histórico.
+ */
+export const termsAcceptances = pgTable(
+  'terms_acceptances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // restrict: excluir a conta não pode apagar a trilha de aceite.
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    termsVersion: text('terms_version').notNull(),
+    privacyVersion: text('privacy_version').notNull(),
+    source: text('source').notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userVersionUx: uniqueIndex('terms_acceptances_user_version_ux').on(t.userId, t.termsVersion),
   }),
 );
 
@@ -176,3 +216,4 @@ export type Organization = typeof organizations.$inferSelect;
 export type BillingEvent = typeof billingEvents.$inferSelect;
 export type Member = typeof members.$inferSelect;
 export type Invitation = typeof invitations.$inferSelect;
+export type TermsAcceptance = typeof termsAcceptances.$inferSelect;

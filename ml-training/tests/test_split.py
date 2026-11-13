@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from imovi_training.data.split import temporal_split
 from tests.fixtures.synthetic_data import make_synthetic_df
@@ -54,3 +55,21 @@ def test_temporal_split_is_deterministic() -> None:
 
     pd.testing.assert_frame_equal(train1, train2)
     pd.testing.assert_frame_equal(test1, test2)
+
+
+def test_temporal_split_purges_repeat_property_and_fingerprint() -> None:
+    df = pd.DataFrame({
+        "property_id": ["repeated", "independent", "repeated", "other_id"],
+        "fingerprint": ["same", "different", "same", "different"],
+        "scraped_at": ["2024-01-01", "2024-01-01", "2025-01-01", "2025-01-01"],
+    })
+    train, test = temporal_split(df, "2025-01-01")
+    assert train.empty
+    assert len(test) == 2
+    assert set(train["property_id"]).isdisjoint(test["property_id"])
+    assert set(train["fingerprint"]).isdisjoint(test["fingerprint"])
+
+
+def test_temporal_split_rejects_unidentified_real_data() -> None:
+    with pytest.raises(ValueError, match="identity"):
+        temporal_split(pd.DataFrame({"scraped_at": ["2024-01-01"]}), "2025-01-01")

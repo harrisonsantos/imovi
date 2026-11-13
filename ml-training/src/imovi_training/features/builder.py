@@ -52,6 +52,7 @@ def build_features(
     df: pd.DataFrame,
     *,
     impute: str = "median",
+    imputation_medians: dict[str, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Constrói (X, y, feature_names) a partir do DataFrame bruto.
 
@@ -75,7 +76,10 @@ def build_features(
         if col not in work.columns:
             work[col] = np.nan
         if impute == "median":
-            median = pd.to_numeric(work[col], errors="coerce").median()
+            median = (
+                imputation_medians[col] if imputation_medians is not None
+                else pd.to_numeric(work[col], errors="coerce").median()
+            )
             # Se todos os valores forem NaN, usa 0.0 como fallback.
             if pd.isna(median):
                 median = 0.0

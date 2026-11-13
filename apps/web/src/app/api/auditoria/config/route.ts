@@ -1,7 +1,7 @@
 /**
  * GET/PUT /api/auditoria/config — configuração Vista da organização ativa.
  *
- * Sessão obrigatória (requireOrg). A Vista API key é cifrada com AES-GCM
+ * Sessão obrigatória (requireOrgAdmin). A Vista API key é cifrada com AES-GCM
  * (VISTA_KEY_SECRET) antes de persistir e NUNCA retorna ao cliente — o GET
  * expõe apenas `hasApiKey`. No primeiro PUT geramos o webhookToken (32 bytes
  * hex) que compõe a URL pública do webhook.
@@ -10,11 +10,12 @@ import { z } from 'zod';
 import { orgVistaConfigRepo } from '@imovi/db/audit';
 import type { OrgVistaConfig } from '@imovi/db/schema-audit';
 import { encryptSecret } from '@imovi/audit/crypto';
+import { appUrlFromRequest, hasTrustedOrigin } from '@/lib/billing';
+import { authEnvOf, getCfEnv } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
-import { requireOrg, sessionGuard } from '@/lib/session';
+import { requireOrgAdmin, sessionGuard } from '@/lib/session';
 
-export const runtime = 'edge';
 
 const ConfigPutSchema = z.object({
   vistaApiUrl: z.string().url().optional(),
@@ -22,16 +23,6 @@ const ConfigPutSchema = z.object({
   reportEmails: z.array(z.string().email()).max(20).optional(),
   avmDeviationPct: z.number().int().min(1).max(100).optional(),
 });
-
-async function getCfEnv(): Promise<Record<string, string>> {
-  const { getRequestContext } = await import('@cloudflare/next-on-pages');
-  try {
-    return getRequestContext().env as Record<string, string>;
-  } catch {
-    // fora do runtime CF (dev puro/testes) — callers caem em process.env
-    return {};
-  }
-}
 
 /** Gera token de webhook: 32 bytes aleatórios em hex (64 chars). */
 function generateWebhookToken(): string {
@@ -46,9 +37,7 @@ function toClientConfig(config: OrgVistaConfig | null, origin: string) {
     hasApiKey: Boolean(config?.vistaApiKeyEnc),
     reportEmails: (config?.reportEmails as string[] | undefined) ?? [],
     avmDeviationPct: config?.avmDeviationPct ?? 25,
-    webhookUrl: config
-      ? `${origin}/api/auditoria/webhooks/vista/${config.webhookToken}`
-      : null,
+    webhookUrl: config ? `${origin}/api/auditoria/webhooks/vista/${config.webhookToken}` : null,
   };
 }
 
@@ -56,11 +45,7 @@ export async function GET(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();
   let orgId: string;
   try {
-    const session = await requireOrg(req, {
-      DATABASE_URL: cfEnv.DATABASE_URL,
-      BETTER_AUTH_SECRET: cfEnv.BETTER_AUTH_SECRET,
-      BETTER_AUTH_URL: cfEnv.BETTER_AUTH_URL,
-    });
+    const session = await requireOrgAdmin(req, authEnvOf(cfEnv));
     orgId = session.org.id;
   } catch (err) {
     return sessionGuard(err);
@@ -73,13 +58,15 @@ export async function GET(req: Request): Promise<Response> {
 
 export async function PUT(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();
+  const appUrl = appUrlFromRequest(
+    req,
+    cfEnv.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_APP_URL,
+  );
+  if (!hasTrustedOrigin(req, appUrl))
+    return apiError(403, 'invalid_origin', 'Origem da requisição não permitida.');
   let orgId: string;
   try {
-    const session = await requireOrg(req, {
-      DATABASE_URL: cfEnv.DATABASE_URL,
-      BETTER_AUTH_SECRET: cfEnv.BETTER_AUTH_SECRET,
-      BETTER_AUTH_URL: cfEnv.BETTER_AUTH_URL,
-    });
+    const session = await requireOrgAdmin(req, authEnvOf(cfEnv));
     orgId = session.org.id;
   } catch (err) {
     return sessionGuard(err);

@@ -1,11 +1,15 @@
 import { cache } from 'react';
-import { and, asc, count, eq, isNull } from '@imovi/db/operators';
-import { cities, listings, neighborhoods, properties } from '@imovi/db/schema';
+import { and, asc, eq } from '@imovi/db/operators';
+import { cities, neighborhoods } from '@imovi/db/schema';
 import { getCfEnv } from './cf-env';
 import { getDb } from './db';
 import { seoSlug } from './seo';
 
-export const MIN_LISTINGS_FOR_INDEX = 10;
+export const MIN_LISTINGS_FOR_INDEX = 20;
+
+export function isIndexablePriceReference(source: string, propertyCount: number): boolean {
+  return source === 'observed_listings' && propertyCount >= MIN_LISTINGS_FOR_INDEX;
+}
 
 export interface SeoNeighborhood {
   name: string;
@@ -47,22 +51,12 @@ export const getSeoCity = cache(async (citySlug: string): Promise<SeoCity | null
     .select({
       name: neighborhoods.name,
       medianPriceM2: neighborhoods.medianPriceM2,
-      listingCount: count(listings.id),
+      listingCount: neighborhoods.listingCount,
+      priceSource: neighborhoods.priceSource,
       lastAggregatedAt: neighborhoods.lastAggregatedAt,
     })
     .from(neighborhoods)
-    .leftJoin(properties, eq(properties.neighborhoodId, neighborhoods.id))
-    .leftJoin(
-      listings,
-      and(eq(listings.propertyId, properties.id), isNull(listings.delistedAt)),
-    )
     .where(and(eq(neighborhoods.city, city.name), eq(neighborhoods.state, city.state)))
-    .groupBy(
-      neighborhoods.id,
-      neighborhoods.name,
-      neighborhoods.medianPriceM2,
-      neighborhoods.lastAggregatedAt,
-    )
     .orderBy(asc(neighborhoods.name));
 
   const mapped = rows
@@ -76,12 +70,12 @@ export const getSeoCity = cache(async (citySlug: string): Promise<SeoCity | null
         medianPriceM2: price,
         listingCount: count,
         lastAggregatedAt: row.lastAggregatedAt,
-        indexable: count >= MIN_LISTINGS_FOR_INDEX,
+        indexable: isIndexablePriceReference(row.priceSource, count),
       };
     })
     .filter((row): row is SeoNeighborhood => row !== null);
   const indexableNeighborhoods = mapped.filter((row) => row.indexable);
-  const dates = mapped
+  const dates = indexableNeighborhoods
     .map((row) => row.lastAggregatedAt)
     .filter((date): date is Date => date !== null);
 

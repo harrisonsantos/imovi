@@ -5,36 +5,38 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:cf": "vercel build --yes && next-on-pages",
+    "build:cf": "node ./scripts/build-cf.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "pages:deploy": "wrangler pages deploy .vercel/output/static --project-name=imovi-web --account-id=f4000b2968b2834704aef648152c7dd4",
-    "test": "vitest run"
+    "test": "vitest run",
+    "preview": "opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare deploy",
+    "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv --include-runtime=false"
   },
   "dependencies": {
     "@imovi/db": "workspace:*",
     "@imovi/ml-infer": "workspace:*",
     "@imovi/shared": "workspace:*",
-    "better-auth": "^1.6.16",
-    "drizzle-orm": "^0.36.4",
-    "next": "^15.2.0",
+    "better-auth": "1.6.22",
+    "drizzle-orm": "0.45.2",
+    "next": "15.5.29",
     "onnxruntime-web": "^1.20.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^3.24.0",
-    "@imovi/audit": "workspace:*"
+    "@imovi/audit": "workspace:*",
+    "@opennextjs/cloudflare": "1.20.16"
   },
   "devDependencies": {
-    "@cloudflare/next-on-pages": "^1.13.8",
     "@imovi/config": "workspace:*",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.17.0",
     "typescript": "^5.7.0",
-    "vercel": "^44.0.0",
-    "wrangler": "^3.106.0",
-    "vitest": "^2.1.8"
+    "wrangler": "4.158.0",
+    "vitest": "3.2.6",
+    "@cloudflare/workers-types": "5.20261104.1"
   }
 }

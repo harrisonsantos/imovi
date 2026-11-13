@@ -85,9 +85,9 @@ export type VistaNegocio = z.infer<typeof vistaNegocioSchema>;
 
 // Schema para requisição de pesquisa Vista
 export const vistaPesquisaSchema = z.object({
-  fields: z.array(z.union([z.string(), z.record(z.any())])).optional(),
-  filter: z.record(z.any()).optional(),
-  order: z.record(z.union([z.literal('asc'), z.literal('desc')])).optional(),
+  fields: z.array(z.union([z.string(), z.record(z.string(), z.any())])).optional(),
+  filter: z.record(z.string(), z.any()).optional(),
+  order: z.record(z.string(), z.union([z.literal('asc'), z.literal('desc')])).optional(),
   paginacao: z
     .object({
       pagina: z.number().default(1),
@@ -128,7 +128,7 @@ export type VistaEventType = (typeof VISTA_EVENT_TYPES)[number];
 export const vistaWebhookSchema = z.object({
   event_type: z.enum(VISTA_EVENT_TYPES),
   timestamp: z.string().optional(),
-  data: z.record(z.any()),
+  data: z.record(z.string(), z.any()),
 });
 
 export type VistaWebhook = z.infer<typeof vistaWebhookSchema>;

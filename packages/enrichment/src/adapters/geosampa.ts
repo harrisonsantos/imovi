@@ -14,7 +14,6 @@ import type { IptuRecord } from '../types.js';
  * Por enquanto, lança erro — usar InfoSimples no fluxo principal.
  */
 export class GeoSampaAdapter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getIptu(
     _address: NormalizedAddress,
     _taxYear: number,

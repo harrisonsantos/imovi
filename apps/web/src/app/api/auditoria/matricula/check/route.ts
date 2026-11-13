@@ -13,13 +13,20 @@ import { getCfEnv, authEnvOf } from '@/lib/cf-env';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/errors';
 import { requireOrg, sessionGuard } from '@/lib/session';
-
-export const runtime = 'edge';
+import { appUrlFromRequest, hasTrustedOrigin } from '@/lib/billing';
 
 const CheckSchema = z.object({ id: z.string().uuid() });
 
 export async function POST(req: Request): Promise<Response> {
   const cfEnv = await getCfEnv();
+  if (
+    !hasTrustedOrigin(
+      req,
+      appUrlFromRequest(req, cfEnv.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_APP_URL),
+    )
+  ) {
+    return Response.json({ error: 'Invalid origin' }, { status: 403 });
+  }
   let orgId: string;
   try {
     orgId = (await requireOrg(req, authEnvOf(cfEnv))).org.id;

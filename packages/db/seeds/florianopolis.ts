@@ -62,7 +62,8 @@ async function main(): Promise<void> {
     boundary: null,
     // numeric() no drizzle aceita string; convertemos com toFixed pra evitar lixo float.
     medianPriceM2: n.medianPriceM2.toFixed(2),
-    lastAggregatedAt: new Date(),
+    priceSource: 'seed_reference',
+    lastAggregatedAt: null,
   }));
 
   // Upsert idempotente — re-rodar atualiza apenas o preço.
@@ -74,15 +75,15 @@ async function main(): Promise<void> {
       set: {
         medianPriceM2: sql`excluded.median_price_m2`,
         lastAggregatedAt: sql`excluded.last_aggregated_at`,
+        priceSource: 'seed_reference',
       },
+      setWhere: sql`${neighborhoods.priceSource} <> 'observed_listings'`,
     });
 
-  // eslint-disable-next-line no-console
   console.log(`[seed:florianopolis] ${rows.length} bairros sincronizados.`);
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('[seed:florianopolis] falhou:', err);
   process.exit(1);
 });

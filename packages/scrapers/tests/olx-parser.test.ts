@@ -29,6 +29,29 @@ describe('parseOlxListingPage', () => {
     expect(listings[1]?.propertyType).toBe('land');
   });
 
+  it('extrai anúncios de payloads RSC self.__next_f.push sem __NEXT_DATA__', () => {
+    const adsJson =
+      '"ads":[{"listId":901,"subject":"Apartamento Água Verde","priceValue":"R$ 380.000","friendlyUrl":"https://www.olx.com.br/d/901","location":"Curitiba, Água Verde","properties":[{"name":"real_estate_type","value":"Venda - Apartamento"},{"name":"size","value":"72 m²"},{"name":"rooms","value":"2 quartos"},{"name":"bathrooms","value":"1 banheiro"},{"name":"garage_spaces","value":"1 vaga"}]},{"listId":902,"subject":"Terreno Batel","priceValue":"R$ 250.000","url":"https://www.olx.com.br/d/902","locationDetails":{"municipality":"Curitiba","neighbourhood":"Batel"},"categoryName":"Terrenos","properties":[{"name":"real_estate_type","value":"Venda - Terreno"},{"name":"size","value":"300 m²"}]}]';
+    const chunk = adsJson.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const html = `<!doctype html><html><body>
+    <script>self.__next_f.push([1,"${chunk}"])</script>
+    </body></html>`;
+
+    const listings = parseOlxListingPage(html, {
+      sourceUrl: 'https://www.olx.com.br/imoveis/venda/estado-parana/curitiba',
+      scrapedAt: new Date('2026-04-15T12:00:00Z'),
+    });
+
+    expect(listings).toHaveLength(2);
+    expect(RawListingSchema.safeParse(listings[0]).success).toBe(true);
+    expect(listings[0]?.sourceListingId).toBe('901');
+    expect(listings[0]?.propertyType).toBe('apartment');
+    expect(listings[0]?.addressRaw).toContain('Água Verde');
+    expect(listings[1]?.sourceListingId).toBe('902');
+    expect(listings[1]?.propertyType).toBe('land');
+    expect(listings[1]?.addressRaw).toContain('Batel');
+  });
+
   it('marca anúncio sem preço como partial e price=null', () => {
     const html = fx('olx/listing-partial.html');
     const listings = parseOlxListingPage(html, {

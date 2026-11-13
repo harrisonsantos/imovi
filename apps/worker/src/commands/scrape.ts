@@ -1,4 +1,9 @@
-import { normalize, dedupe, matchNeighborhood, type NeighborhoodCandidate } from '@imovi/normalizer';
+import {
+  normalize,
+  dedupe,
+  matchNeighborhood,
+  type NeighborhoodCandidate,
+} from '@imovi/normalizer';
 import {
   createDbClient,
   listingRepo,
@@ -18,8 +23,10 @@ import {
 
 import type { ListingSource, NormalizedListing, RawListing } from '@imovi/shared';
 import type { Logger } from '../logger.js';
+import { runAggregateNeighborhoodsCommand } from './aggregate-neighborhoods.js';
 import {
   runScrape,
+  listingKey,
   type ScraperFn,
   type ListingRepo as PipelineListingRepo,
   type PropertyRepo as PipelinePropertyRepo,
@@ -50,14 +57,14 @@ export interface CityJob {
  * Cada portal formata URL-de-listagem de jeito próprio — a string em
  * `locations` é interpolada direto na URL pelo adapter.
  */
-const DEFAULT_CITY_JOBS: CityJob[] = [
+export const DEFAULT_CITY_JOBS: CityJob[] = [
   {
     name: 'Curitiba',
     state: 'PR',
     locations: {
       zap: 'pr+curitiba',
       vivareal: 'parana/curitiba',
-      olx: 'pr/cidade-curitiba',
+      olx: 'pr/curitiba',
     },
   },
 ];
@@ -82,9 +89,9 @@ const listingRepoAdapter: PipelineListingRepo = {
   async upsertBatch(db, listings, propertyIds) {
     const rows = listings.map((l) => ({
       ...toDbListingRow(l),
-      propertyId: propertyIds?.get(l.sourceListingId) ?? null,
+      propertyId: propertyIds?.get(listingKey(l)) ?? null,
     }));
-    await listingRepo.upsertBatch(db as DbClient, rows);
+    return (await listingRepo.upsertBatch(db as DbClient, rows)).length;
   },
 };
 
@@ -112,10 +119,11 @@ function makePropertyRepoAdapter(
   };
 }
 
-const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
+export const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
   async record(db, err) {
     await scrapeErrorRepo.record(db as DbClient, {
       source: err.source,
+      url: err.url ?? null,
       error: err.message,
       occurredAt: err.at,
     });
@@ -126,21 +134,24 @@ const scrapeErrorRepoAdapter: PipelineScrapeErrorRepo = {
  * Mapeia ListingSource → factory de AsyncIterable<RawListing>, aplicando
  * `maxPages` e a policy de robots.txt previamente carregada.
  */
-function buildScraper(
+export function buildScraper(
   source: ListingSource,
   location: string,
   maxPages: number,
   policyBySource: Record<ListingSource, RobotsPolicy>,
 ): ScraperFn {
   const policy = policyBySource[source];
-  const opts = {
-    location,
-    operation: 'sale',
-    maxPages,
-    robotsPolicy: policy,
-  } as const;
 
-  return async function* (): AsyncGenerator<RawListing, void, void> {
+  return async function* (ctx): AsyncGenerator<RawListing, void, void> {
+    const opts = {
+      location,
+      operation: 'sale',
+      maxPages,
+      robotsPolicy: policy,
+      onDiagnostic: (diag: { reason: string; url: string }) => {
+        ctx?.onDiagnostic?.({ reason: diag.reason, url: diag.url });
+      },
+    } as const;
     const iterable =
       source === 'zap'
         ? scrapeZap(opts)
@@ -187,10 +198,7 @@ export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
   const policyEntries = await Promise.all(
     opts.sources.map(async (src) => [src, await fetchRobotsPolicy(HOSTS[src])] as const),
   );
-  const policyBySource = Object.fromEntries(policyEntries) as Record<
-    ListingSource,
-    RobotsPolicy
-  >;
+  const policyBySource = Object.fromEntries(policyEntries) as Record<ListingSource, RobotsPolicy>;
 
   const cityJobs = await loadCityJobs(db, opts.logger);
 
@@ -213,7 +221,10 @@ export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
       }
       scrapers[source] = buildScraper(source, location, maxPages, policyBySource);
     }
-    if (Object.keys(scrapers).length === 0) continue;
+    if (Object.keys(scrapers).length === 0) {
+      totals.errors += 1;
+      continue;
+    }
 
     opts.logger.info('scrape_command_start', {
       sources: Object.keys(scrapers),
@@ -225,16 +236,13 @@ export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
     // Carrega bairros da cidade uma vez por job — usados pelo matcher de
     // neighborhood_id no upsert de properties.
     const neighborhoodsByCity = new Map<string, NeighborhoodCandidate[]>();
-    neighborhoodsByCity.set(
-      job.name,
-      await neighborhoodRepo.listByCity(db, job.name, job.state),
-    );
+    neighborhoodsByCity.set(job.name, await neighborhoodRepo.listByCity(db, job.name, job.state));
 
     const result = await runScrape({
       sources: Object.keys(scrapers) as ListingSource[],
       scrapers,
       normalize,
-      dedupe: (arr) => dedupe(arr).clusters.map((c) => c.representative),
+      dedupe,
       db,
       repos: {
         listings: listingRepoAdapter,
@@ -255,4 +263,11 @@ export async function runScrapeCommand(opts: ScrapeCommandOpts): Promise<void> {
   }
 
   opts.logger.info('scrape_command_result', { ...totals });
+  // Aggregation is part of the scrape job, and failure must fail the cron.
+  await runAggregateNeighborhoodsCommand({ databaseUrl: opts.databaseUrl, logger: opts.logger });
+  if (totals.errors > 0 || totals.persisted === 0) {
+    throw new Error(
+      `Scrape incomplete: ${totals.errors} errors, ${totals.persisted} stored listings`,
+    );
+  }
 }

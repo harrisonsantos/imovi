@@ -15,6 +15,7 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from imovi_training.data.loader import load_training_data
@@ -46,6 +47,18 @@ def _cmd_train(args: argparse.Namespace) -> int:
     df = load_training_data(str(input_path))
 
     train_df, test_df = temporal_split(df, cutoff=cutoff)
+    min_train, min_test = args.min_train, args.min_test
+    if min_train < 100 or min_test < 20:
+        raise ValueError("Training requires minimums of 100 train and 20 test observations")
+    if len(train_df) < min_train or len(test_df) < min_test:
+        raise ValueError(
+            f"Insufficient temporal holdout after property purge: "
+            f"n_train={len(train_df)} (required {min_train}), "
+            f"n_test={len(test_df)} (required {min_test})"
+        )
+    prices = pd.to_numeric(df["price"], errors="coerce").to_numpy(dtype=float)
+    if not np.isfinite(prices).all() or (prices <= 0).any():
+        raise ValueError("Training targets must be positive finite observed prices")
 
     # Feature de localização: mediana R$/m² por bairro, SÓ do treino (anti-leakage).
     neighborhood_medians, global_median = compute_neighborhood_medians(train_df)
@@ -55,14 +68,14 @@ def _cmd_train(args: argparse.Namespace) -> int:
     # Medianas SÓ do treino — evita leak do teste para o serving.
     imputation_medians = compute_imputation_medians(train_df)
 
-    X_train, y_train, feature_names = build_features(train_df)
-    X_test, y_test, _ = build_features(test_df)
+    X_train, y_train, feature_names = build_features(
+        train_df, imputation_medians=imputation_medians
+    )
+    X_test, y_test, _ = build_features(test_df, imputation_medians=imputation_medians)
+    if not np.isfinite(X_train).all() or not np.isfinite(X_test).all():
+        raise ValueError("Training features must be finite")
 
     model = train_lgbm(X_train, y_train)
-
-    onnx_bytes = export_to_onnx(model, feature_names)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(onnx_bytes)
 
     # Modelos quantile p10/p90 para intervalos calibrados (--quantiles).
     # Layout: <output>.onnx + <output sem ext>-p10.onnx + -p90.onnx
@@ -71,11 +84,6 @@ def _cmd_train(args: argparse.Namespace) -> int:
         for alpha, suffix in [(0.1, "p10"), (0.9, "p90")]:
             qm = train_lgbm_quantile(X_train, y_train, alpha=alpha)
             quantile_models[suffix] = qm
-            q_bytes = export_to_onnx(qm, feature_names)
-            q_path = output_path.with_name(
-                output_path.stem + f"-{suffix}" + output_path.suffix
-            )
-            q_path.write_bytes(q_bytes)
 
     # Sidecar JSON consumido pelo @imovi/ml-infer no runtime TS/Edge.
     metadata = build_metadata(
@@ -84,9 +92,9 @@ def _cmd_train(args: argparse.Namespace) -> int:
         imputation_medians=imputation_medians,
     )
     metadata_path = output_path.with_suffix(output_path.suffix + ".metadata.json")
-    metadata_path.write_text(dump_metadata_json(metadata))
-
-    preds = model.predict(X_test) if len(X_test) > 0 else []
+    preds = model.predict(X_test)
+    if not np.isfinite(preds).all():
+        raise ValueError("Holdout predictions must be finite")
     metrics: dict[str, object] = {
         "n_train": int(len(X_train)),
         "n_test": int(len(X_test)),
@@ -103,16 +111,29 @@ def _cmd_train(args: argparse.Namespace) -> int:
             )
         # Cobertura empírica do intervalo [p10, p90] no holdout (alvo ~0.80).
         if quantile_models:
-            import numpy as np
-
             p10 = quantile_models["p10"].predict(X_test)
             p90 = quantile_models["p90"].predict(X_test)
+            if not np.isfinite(p10).all() or not np.isfinite(p90).all() or (p10 > p90).any():
+                raise ValueError("Holdout quantiles must be finite and ordered")
             metrics["interval_coverage_p10_p90"] = float(
                 np.mean((y_test >= p10) & (y_test <= p90))
             )
 
+    for metric in ("mape", "mdape", "r2"):
+        if metric not in metrics or not np.isfinite(metrics[metric]):
+            raise ValueError(f"Holdout metric {metric} must be finite")
+    # All gates run before generating/writing serving artifacts.
+    artifacts = {output_path: export_to_onnx(model, feature_names)}
+    for suffix, qm in quantile_models.items():
+        q_path = output_path.with_name(output_path.stem + f"-{suffix}" + output_path.suffix)
+        artifacts[q_path] = export_to_onnx(qm, feature_names)
+    metrics_json = json.dumps(metrics, ensure_ascii=False, indent=2, allow_nan=False)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    for artifact_path, artifact_bytes in artifacts.items():
+        artifact_path.write_bytes(artifact_bytes)
+    metadata_path.write_text(dump_metadata_json(metadata), encoding="utf-8")
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_path.write_text(json.dumps(metrics, ensure_ascii=False, indent=2))
+    metrics_path.write_text(metrics_json, encoding="utf-8")
     return 0
 
 
@@ -206,6 +227,8 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--input", required=True, help="Caminho do parquet de entrada.")
     train.add_argument("--output", required=True, help="Caminho do .onnx de saída.")
     train.add_argument("--metrics", required=True, help="Caminho do JSON de métricas.")
+    train.add_argument("--min-train", type=int, default=100)
+    train.add_argument("--min-test", type=int, default=20)
     train.add_argument(
         "--cutoff", required=True, help="Data de corte (ISO) para split temporal."
     )

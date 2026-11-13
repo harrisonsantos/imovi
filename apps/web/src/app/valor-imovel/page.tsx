@@ -6,7 +6,6 @@ import { getSeoCatalog } from '@/lib/seo-data';
 import { SITE_URL } from '@/lib/seo';
 import { tokens as C } from '@/lib/tokens';
 
-export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
@@ -76,6 +75,12 @@ export default async function ValorImovelPage() {
         <h2 id="cidades-cobertas" style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>
           Cidades cobertas
         </h2>
+        {cities.length === 0 && (
+          <p style={{ color: C.text2 }}>
+            Ainda não há bairros com medianas verificadas de pelo menos vinte imóveis distintos. O
+            formulário identifica as referências iniciais disponíveis.
+          </p>
+        )}
         <div
           style={{
             display: 'grid',

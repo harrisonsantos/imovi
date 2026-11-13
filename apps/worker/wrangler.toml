@@ -45,9 +45,8 @@ bucket_name = "html-snapshots"
 
 # ---------------------------------------------------------------------------
 # Ambientes
-# Nota: ao usar wrangler CLI manualmente, sempre passe --env="" para
-# garantir o ambiente top-level. Ex: wrangler deploy --env=""
-#       wrangler secret put DATABASE_URL --env=""
+# Sem --env, Wrangler usa o ambiente top-level de produção.
+# Staging exige --env=preview explicitamente.
 # ---------------------------------------------------------------------------
 [env.preview]
 name = "imovi-worker-preview"
@@ -55,3 +54,15 @@ name = "imovi-worker-preview"
 [env.preview.vars]
 LOG_LEVEL = "debug"
 NODE_ENV  = "development"
+NEXT_PUBLIC_APP_ENV = "preview"
+
+[env.preview.triggers]
+crons = []
+
+[[env.preview.kv_namespaces]]
+binding = "IPTU_CACHE"
+id = "cc01efc63dc34def97783f42ddf30282"
+
+[[env.preview.r2_buckets]]
+binding = "HTML_SNAPSHOTS"
+bucket_name = "html-snapshots-preview"

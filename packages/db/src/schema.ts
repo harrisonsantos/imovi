@@ -23,7 +23,10 @@ import {
   doublePrecision,
   uniqueIndex,
   index,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { organizations, users } from './schema-auth.js';
 
 export const cities = pgTable(
   'cities',
@@ -54,6 +57,7 @@ export const neighborhoods = pgTable(
     name: text('name').notNull(),
     boundary: jsonb('boundary'),
     medianPriceM2: numeric('median_price_m2', { precision: 10, scale: 2 }),
+    priceSource: text('price_source').notNull().default('seed_reference'),
     listingCount: integer('listing_count').default(0),
     lastAggregatedAt: timestamp('last_aggregated_at', { withTimezone: true }),
   },
@@ -120,11 +124,14 @@ export const listingSnapshots = pgTable(
     listingId: uuid('listing_id')
       .notNull()
       .references(() => listings.id, { onDelete: 'cascade' }),
+    propertyId: uuid('property_id').references(() => properties.id),
+    operation: text('operation'),
     price: numeric('price', { precision: 14, scale: 2 }),
     capturedAt: timestamp('captured_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     listingIdx: index('listing_snapshots_listing_idx').on(t.listingId, t.capturedAt),
+    capturedUx: uniqueIndex('listing_snapshots_listing_captured_ux').on(t.listingId, t.capturedAt),
   }),
 );
 
@@ -161,14 +168,21 @@ export const priceEstimates = pgTable(
     confidenceLow: numeric('confidence_low', { precision: 14, scale: 2 }),
     confidenceHigh: numeric('confidence_high', { precision: 14, scale: 2 }),
     modelVersion: text('model_version').notNull(),
+    method: text('method').notNull().default('heuristic'),
+    resultMetadata: jsonb('result_metadata'),
     featuresUsed: jsonb('features_used'),
     comparablesIds: uuid('comparables_ids').array(),
     requestedBy: uuid('requested_by'),
+    ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     propertyIdx: index('price_estimates_property_idx').on(t.propertyId),
     modelIdx: index('price_estimates_model_idx').on(t.modelVersion),
+    ownerCreatedIdx: index('price_estimates_owner_created_idx').on(
+      t.ownerUserId,
+      t.createdAt.desc(),
+    ),
   }),
 );
 
@@ -229,6 +243,37 @@ export const optOutRequests = pgTable(
   (t) => ({
     statusIdx: index('opt_out_requests_status_idx').on(t.status),
   }),
+);
+
+export const waitlistContacts = pgTable('waitlist_contacts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  source: text('source').notNull(),
+  consentVersion: text('consent_version').notNull(),
+  consentedAt: timestamp('consented_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Keys are SHA-256(namespace + trusted IP); raw IPs are never stored. */
+export const apiRateLimits = pgTable('api_rate_limits', {
+  key: text('key').primaryKey(),
+  windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+  count: integer('count').notNull().default(1),
+});
+
+export const usageCounters = pgTable(
+  'usage_counters',
+  {
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    metric: text('metric').notNull(),
+    periodStart: timestamp('period_start', { withTimezone: true })
+      .notNull()
+      .default(sql`(date_trunc('month', now() AT TIME ZONE 'utc') AT TIME ZONE 'utc')`),
+    count: integer('count').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.orgId, t.metric, t.periodStart] }) }),
 );
 
 export type City = typeof cities.$inferSelect;

@@ -1,90 +1,83 @@
-# Retraining semanal do modelo AVM.
-#
-# Fluxo: export Neon → train (com quantiles) → gate de promoção (MdAPE não
-# pode regredir vs. modelo ativo) → upload ONNX p/ R2 → registra + ativa em
-# model_versions. Reprovação no gate falha o job de propósito (visibilidade).
-#
-# Secrets necessários: DATABASE_URL, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+# Weekly AVM retraining. Gate stays strict; uploads never overwrite active files.
 name: retrain-model
 
 on:
   schedule:
-    - cron: '0 8 * * 1' # segunda 05:00 BRT — depois do scrape diário das 03:00
+    - cron: '0 8 * * 1'
   workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retrain-model
+  cancel-in-progress: false
 
 jobs:
   retrain:
     runs-on: ubuntu-latest
+    environment: model-training
     defaults:
       run:
         working-directory: ml-training
     steps:
       - uses: actions/checkout@v4
-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: astral-sh/setup-uv@v5
-
-      - name: Instala dependências
+        with:
+          python-version: '3.13'
+      - name: Install frozen dependencies
         run: uv sync --frozen
-
-      - name: Define versão do modelo
+      - name: Define immutable version
         id: version
-        run: echo "version=v-auto-$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
-
-      - name: Exporta dataset do Neon
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: echo "version=v-$RUN_ID-$RUN_ATTEMPT-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+      - name: Export historical observations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: uv run python -m imovi_training.cli export-neon --output data/train.parquet
-
-      - name: Treina modelo (com quantiles p10/p90)
+        run: uv run --frozen python -m imovi_training.cli export-neon --output data/train.parquet
+      - name: Validate and train temporal holdout
         run: |
-          # Cutoff = 14 dias atrás → holdout temporal com os dados mais recentes
           CUTOFF=$(date -d '14 days ago' +%Y-%m-%d)
-          uv run python -m imovi_training.cli train \
-            --input data/train.parquet \
-            --output models/model.onnx \
-            --metrics models/metrics.json \
-            --cutoff "$CUTOFF" \
+          uv run --frozen python -m imovi_training.cli train \
+            --input data/train.parquet --output models/model.onnx \
+            --metrics models/metrics.json --cutoff "$CUTOFF" \
             --model-version "${{ steps.version.outputs.version }}" \
-            --quantiles
-
-      - name: Gate de promoção (dry-run)
+            --min-train 100 --min-test 20 --quantiles
+      - name: Promotion gate (read-only)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          uv run python -m imovi_training.promote \
-            --metrics models/metrics.json \
-            --version "${{ steps.version.outputs.version }}" \
-            --artifact-url "r2://imovi-model-artifacts/current/model.onnx" \
-            --dry-run
-
-      - name: Upload artefatos para R2
+          uv run --frozen python -m imovi_training.promote \
+            --metrics models/metrics.json --version "${{ steps.version.outputs.version }}" \
+            --artifact-url "r2://imovi-model-artifacts/versions/${{ steps.version.outputs.version }}/model.onnx" --dry-run
+      - name: Upload immutable artifact set
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION: ${{ steps.version.outputs.version }}
         working-directory: .
         run: |
-          npx wrangler r2 object put imovi-model-artifacts/current/model.onnx \
-            --file ml-training/models/model.onnx --remote
-          npx wrangler r2 object put imovi-model-artifacts/current/model.onnx.metadata.json \
-            --file ml-training/models/model.onnx.metadata.json --remote
-          npx wrangler r2 object put imovi-model-artifacts/current/model-p10.onnx \
-            --file ml-training/models/model-p10.onnx --remote
-          npx wrangler r2 object put imovi-model-artifacts/current/model-p90.onnx \
-            --file ml-training/models/model-p90.onnx --remote
-
-      - name: Registra e ativa em model_versions
+          for FILE in model.onnx model.onnx.metadata.json model-p10.onnx model-p90.onnx; do
+            test -s "ml-training/models/$FILE"
+            npx --yes wrangler@4.144.0 r2 object put "imovi-model-artifacts/versions/$VERSION/$FILE" \
+              --file "ml-training/models/$FILE" --remote
+          done
+      - name: Register and activate after successful upload
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          uv run python -m imovi_training.promote \
-            --metrics models/metrics.json \
-            --version "${{ steps.version.outputs.version }}" \
-            --artifact-url "r2://imovi-model-artifacts/current/model.onnx"
-
-      - name: Publica métricas no summary
+          uv run --frozen python -m imovi_training.promote \
+            --metrics models/metrics.json --version "${{ steps.version.outputs.version }}" \
+            --artifact-url "r2://imovi-model-artifacts/versions/${{ steps.version.outputs.version }}/model.onnx"
+      - name: Preserve metrics
         if: always()
-        run: |
-          echo '## Métricas do retraining' >> "$GITHUB_STEP_SUMMARY"
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat models/metrics.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo '(sem métricas)' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+        uses: actions/upload-artifact@v4
+        with:
+          name: retraining-metrics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ml-training/models/metrics.json
+          if-no-files-found: ignore

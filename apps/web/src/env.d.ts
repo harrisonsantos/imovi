@@ -1,3 +1,5 @@
+/// <reference types="@cloudflare/workers-types" />
+
 /**
  * Tipagem de variáveis de ambiente usadas pelo app web.
  *

@@ -1,23 +1,19 @@
 /**
- * Parser minimalista de robots.txt (RFC 9309 subset).
+ * Parser de robots.txt (RFC 9309).
  *
  * Suporta:
  *   - User-agent: <nome>  (case-insensitive, match por prefixo)
  *   - Allow: <path>
  *   - Disallow: <path>
+ *   - Wildcards `*` e âncora de fim `$` nas regras (RFC 9309 §2.2.3)
  *   - Comentários (`#`) e linhas em branco
- *
- * NÃO suporta (ainda):
- *   - Sitemap, Crawl-delay, Host (campos não normativos)
- *   - Wildcards `*` e `$` nas regras (RFC 9309 §2.2.3)
- *
- * Para MVP é suficiente: checa prefixo literal, aplicando regra mais
- * específica (maior comprimento) em caso de conflito Allow/Disallow.
+ *   - Cache em memória por host em `fetchRobotsPolicy`
  */
 
 interface Rule {
   kind: 'allow' | 'disallow';
   path: string;
+  regex: RegExp;
 }
 
 interface Group {
@@ -32,6 +28,16 @@ export interface RobotsPolicy {
    * "ImoviBR-Bot/1.0"). Grupo específico sobrepõe coringa `*`.
    */
   isAllowed(userAgent: string, path: string): boolean;
+}
+
+function compileRulePattern(pattern: string): RegExp {
+  const hasEndAnchor = pattern.endsWith('$');
+  const rawBody = hasEndAnchor ? pattern.slice(0, -1) : pattern;
+  const escaped = rawBody
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${escaped}${hasEndAnchor ? '$' : ''}`);
 }
 
 export function parseRobotsTxt(text: string): RobotsPolicy {
@@ -66,7 +72,11 @@ export function parseRobotsTxt(text: string): RobotsPolicy {
       // Disallow vazio = permite tudo (não vira regra)
       if (field === 'disallow' && value === '') continue;
       if (value === '') continue;
-      current.rules.push({ kind: field, path: value });
+      current.rules.push({
+        kind: field,
+        path: value,
+        regex: compileRulePattern(value),
+      });
     }
     // demais campos (sitemap, crawl-delay) ignorados
   }
@@ -82,10 +92,10 @@ export function parseRobotsTxt(text: string): RobotsPolicy {
       const group = specific ?? wildcard;
       if (!group) return true;
 
-      // 2) Regra mais específica (maior comprimento) vence; empate → Allow
+      // 2) Regra mais específica (maior comprimento do path pattern) vence; empate → Allow
       let best: Rule | null = null;
       for (const rule of group.rules) {
-        if (!path.startsWith(rule.path)) continue;
+        if (!rule.regex.test(path)) continue;
         if (best === null || rule.path.length > best.path.length) {
           best = rule;
         } else if (
@@ -101,22 +111,38 @@ export function parseRobotsTxt(text: string): RobotsPolicy {
   };
 }
 
+const robotsPolicyCache = new Map<string, RobotsPolicy>();
+
+/** Limpa o cache em memória de `robots.txt` (útil em testes). */
+export function clearRobotsPolicyCache(): void {
+  robotsPolicyCache.clear();
+}
+
 /**
- * Fetch + parse `robots.txt` para um host. Retorna policy "allow all"
- * se a requisição falhar (404, network error, etc.) — robots.txt ausente
- * equivale a permissão total pela convenção.
+ * Fetch + parse `robots.txt` para um host, com cache em memória por host.
+ * Retorna policy "allow all" se a requisição falhar (404, 403, network error) —
+ * robots.txt inacessível equivale a permissão no fallback pela convenção.
  */
 export async function fetchRobotsPolicy(
   host: string,
   fetchFn: typeof fetch = globalThis.fetch,
 ): Promise<RobotsPolicy> {
+  const cached = robotsPolicyCache.get(host);
+  if (cached) return cached;
+
   try {
     const res = await fetchFn(`https://${host}/robots.txt`, {
-      headers: { accept: 'text/plain' },
+      headers: { accept: 'text/plain,*/*;q=0.8' },
     });
-    if (!res.ok) return parseRobotsTxt('');
+    if (!res.ok) {
+      const fallback = parseRobotsTxt('');
+      robotsPolicyCache.set(host, fallback);
+      return fallback;
+    }
     const text = await res.text();
-    return parseRobotsTxt(text);
+    const policy = parseRobotsTxt(text);
+    robotsPolicyCache.set(host, policy);
+    return policy;
   } catch {
     return parseRobotsTxt('');
   }

@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Planos e preços para corretores e imobiliárias',
+  title: 'Planos e preços do imovi',
   description:
-    'Compare os planos do imovi para avaliação de imóveis, relatórios, API e auditoria de vendas para imobiliárias.',
+    'Estimativa básica gratuita de valor de imóveis e planos da auditoria de vendas para imobiliárias que usam o Vista CRM.',
   alternates: { canonical: '/precos/' },
   openGraph: {
     title: 'Planos e preços do imovi',
-    description: 'Avaliação imobiliária e auditoria de vendas para profissionais e imobiliárias.',
+    description: 'Estimativa gratuita de valor e auditoria de vendas para imobiliárias.',
     url: '/precos/',
   },
 };

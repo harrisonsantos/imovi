@@ -12,29 +12,45 @@ export interface ListingRepo {
     db: DbClient,
     listings: NormalizedListing[],
     propertyIds?: Map<string, string>,
-  ): Promise<void>;
+  ): Promise<number>;
 }
 
 export interface PropertyRepo {
   upsertFromListing(db: DbClient, listing: NormalizedListing): Promise<{ id: string }>;
 }
 
-export interface ScrapeErrorRepo {
-  record(
-    db: DbClient,
-    err: { source: ListingSource; message: string; at: Date },
-  ): Promise<void>;
+export interface ScrapeErrorRecord {
+  source: ListingSource;
+  message: string;
+  url?: string | null;
+  at: Date;
 }
 
-export type ScraperFn = (ctx: {
+export interface ScrapeErrorRepo {
+  record(db: DbClient, err: ScrapeErrorRecord): Promise<void>;
+}
+
+export interface ScraperDiagnosticInput {
+  reason: string;
+  url?: string | null;
+}
+
+export interface ScraperContext {
   logger: Logger;
-}) => AsyncGenerator<RawListing, void, void>;
+  onDiagnostic?: (diag: ScraperDiagnosticInput) => void;
+}
+
+export type ScraperFn = (ctx: ScraperContext) => AsyncGenerator<RawListing, void, void>;
 
 export interface RunScrapeDeps {
   sources: ListingSource[];
   scrapers: Record<string, ScraperFn>;
   normalize: (raw: RawListing) => NormalizedListing | null;
-  dedupe: (arr: NormalizedListing[]) => NormalizedListing[];
+  dedupe: (arr: NormalizedListing[]) =>
+    | NormalizedListing[]
+    | {
+        clusters: Array<{ representative: NormalizedListing; listings: NormalizedListing[] }>;
+      };
   db: DbClient;
   repos: {
     listings: ListingRepo;
@@ -43,6 +59,11 @@ export interface RunScrapeDeps {
   };
   logger: Logger;
   maxPerSource?: number;
+}
+
+/** Source IDs are only unique inside a portal. */
+export function listingKey(listing: Pick<NormalizedListing, 'source' | 'sourceListingId'>): string {
+  return JSON.stringify([listing.source, listing.sourceListingId]);
 }
 
 export interface RunScrapeResult {
@@ -62,16 +83,7 @@ export interface RunScrapeResult {
  * `repos.errors.record` e os demais sources seguem processando.
  */
 export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
-  const {
-    sources,
-    scrapers,
-    normalize,
-    dedupe,
-    db,
-    repos,
-    logger,
-    maxPerSource,
-  } = deps;
+  const { sources, scrapers, normalize, dedupe, db, repos, logger, maxPerSource } = deps;
 
   const result: RunScrapeResult = {
     scraped: 0,
@@ -88,14 +100,22 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
     const scraper = scrapers[source];
     if (!scraper) {
       logger.warn('scraper_missing', { source });
+      result.errors += 1;
+      await repos.errors.record(db, { source, message: 'scraper_missing', at: new Date() });
       continue;
     }
 
     let countThisSource = 0;
+    let lastDiagnostic: ScraperDiagnosticInput | undefined;
 
     try {
       logger.info('scrape_source_start', { source });
-      const gen = scraper({ logger });
+      const gen = scraper({
+        logger,
+        onDiagnostic: (diag) => {
+          lastDiagnostic = diag;
+        },
+      });
       for await (const raw of gen) {
         result.scraped += 1;
         countThisSource += 1;
@@ -105,6 +125,8 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
           if (norm !== null) {
             result.normalized += 1;
             normalizedAcc.push(norm);
+          } else {
+            result.rejected += 1;
           }
         } catch {
           result.rejected += 1;
@@ -115,23 +137,36 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
           break;
         }
       }
+      if (countThisSource === 0) {
+        const emptyReason = lastDiagnostic?.reason ?? 'scraper_empty_result';
+        throw Object.assign(new Error(emptyReason), {
+          url: lastDiagnostic?.url ?? null,
+        });
+      }
       logger.info('scrape_source_done', { source, count: countThisSource });
     } catch (err) {
       result.errors += 1;
       const message = err instanceof Error ? err.message : String(err);
-      logger.error('scrape_source_failed', { source, error: message });
+      const errUrl =
+        err &&
+        typeof err === 'object' &&
+        'url' in err &&
+        typeof (err as { url?: unknown }).url === 'string'
+          ? (err as { url: string }).url
+          : (lastDiagnostic?.url ?? null);
+      logger.error('scrape_source_failed', { source, error: message, url: errUrl });
       try {
         await repos.errors.record(db, {
           source,
           message,
+          url: errUrl,
           at: new Date(),
         });
       } catch (recordErr) {
         // Falha ao registrar erro não derruba o pipeline — apenas loga.
         logger.error('scrape_error_record_failed', {
           source,
-          error:
-            recordErr instanceof Error ? recordErr.message : String(recordErr),
+          error: recordErr instanceof Error ? recordErr.message : String(recordErr),
         });
       }
     }
@@ -139,17 +174,24 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
 
   // Dedupe global (union-find ±1m² — impl em @imovi/normalizer).
   const deduped = dedupe(normalizedAcc);
-  result.deduped = deduped.length;
+  const clusters = Array.isArray(deduped)
+    ? deduped.map((listing) => ({ representative: listing, listings: [listing] }))
+    : deduped.clusters;
+  result.deduped = clusters.length;
 
   // Persistência: upserta properties primeiro para obter IDs, depois
   // upserta listings com o propertyId correto (necessário para ML training).
-  if (deduped.length > 0) {
+  if (clusters.length > 0) {
     const propertyIds = new Map<string, string>();
-    for (const listing of deduped) {
+    const rowsToPersist: NormalizedListing[] = [];
+    for (const cluster of clusters) {
+      const listing = cluster.representative;
       try {
         const prop = await repos.properties.upsertFromListing(db, listing);
-        propertyIds.set(listing.sourceListingId, prop.id);
-        result.persisted += 1;
+        for (const sourceListing of cluster.listings) {
+          propertyIds.set(listingKey(sourceListing), prop.id);
+          rowsToPersist.push(sourceListing);
+        }
       } catch (err) {
         result.errors += 1;
         logger.error('property_upsert_failed', {
@@ -158,13 +200,17 @@ export async function runScrape(deps: RunScrapeDeps): Promise<RunScrapeResult> {
         });
       }
     }
-    try {
-      await repos.listings.upsertBatch(db, deduped, propertyIds);
-    } catch (err) {
-      result.errors += 1;
-      logger.error('listing_batch_failed', {
-        error: err instanceof Error ? err.message : String(err),
-      });
+    for (const listing of rowsToPersist) {
+      try {
+        result.persisted += await repos.listings.upsertBatch(db, [listing], propertyIds);
+      } catch (err) {
+        result.errors += 1;
+        logger.error('listing_batch_failed', {
+          source: listing.source,
+          sourceListingId: listing.sourceListingId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 
